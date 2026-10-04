@@ -54,7 +54,7 @@ async function sbReq(path, opts = {}){
 const API = {
   async login(phone,password){
     try{
-      const data = await sbReq('/auth/v1/token?grant_type=password',{method:'POST',auth:false,body:{email:`${normalizePhone(phone)}@agelgil.com`,password}})
+      const data = await sbReq('/auth/v1/token?grant_type=password',{method:'POST',auth:false,body:{phone:normalizePhone(phone),password}})
       if(!data?.access_token || !data?.user?.id) throw {key:'invalidCredentials'}
       sbToken=data.access_token; localStorage.setItem('csd_sb_token',sbToken); localStorage.setItem('csd_sb_uid',data.user.id)
       const rows=await sbReq(`/rest/v1/profiles?id=eq.${data.user.id}&select=*`)
