@@ -12,7 +12,7 @@ const ROLE = {
 const labels = {
   am: {
     brand:'Dirsha-ድርሻ',
-    subtitle:'የኮሚሽን እና ሽያጭ ስርጭት ስርዓት',
+    subtitle:'እንኳን ወደ Dirsha-ድርሻ መጡ',
     login:'ግባ',
     phone:'ስልክ ቁጥር',
     password:'የይለፍ ቃል',
@@ -54,7 +54,7 @@ const labels = {
   },
   en: {
     brand:'Dirsha-ድርሻ',
-    subtitle:'Commission & Sales Distribution System',
+    subtitle:'Welcome to Dirsha-ድርሻ',
     login:'Sign In',
     phone:'Phone Number',
     password:'Password',
