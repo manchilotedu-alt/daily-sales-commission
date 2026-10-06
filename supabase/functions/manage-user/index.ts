@@ -1,7 +1,7 @@
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2'
 const cors={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization,x-client-info,apikey,content-type'}
 const out=(b,s=200)=>new Response(JSON.stringify(b),{status:s,headers:{...cors,'Content-Type':'application/json'}})
-const normalize=(v='')=>{const d=String(v).replace(/\\D/g,'');return d.startsWith('251')?'+'+d:(d.startsWith('0')?'+251'+d.slice(1):'+'+d)}
+const normalize=(v='')=>{const d=String(v).replace(/\D/g,'');return d.startsWith('251')?'+'+d:(d.startsWith('0')?'+251'+d.slice(1):'+'+d)}
 Deno.serve(async req=>{
  if(req.method==='OPTIONS')return new Response('ok',{headers:cors})
  try{
