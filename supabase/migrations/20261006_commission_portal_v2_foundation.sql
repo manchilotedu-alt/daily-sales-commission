@@ -141,10 +141,15 @@ with check (
   auth.uid() is not null
   and (
     public.is_super_admin()
-    or (public.is_branch_admin() and branch_id = public.current_branch_id())
-    or lead_id = auth.uid()
-    or assistant_id = auth.uid()
-    or driver_id = auth.uid()
+    or (
+      branch_id = public.current_branch_id()
+      and (
+        public.is_branch_admin()
+        or lead_id = auth.uid()
+        or assistant_id = auth.uid()
+        or driver_id = auth.uid()
+      )
+    )
   )
 );
 
