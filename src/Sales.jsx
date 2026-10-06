@@ -9,11 +9,12 @@ export function SalesPage({user}){
  const [leadId,setLeadId]=useState(user.role==='lead'||user.role==='lead_sales'?user.id:''),[assistantId,setAssistantId]=useState(user.role==='assistant'?user.id:''),[driverId,setDriverId]=useState(user.role==='driver'?user.id:'')
  const [productId,setProductId]=useState(''),[qty,setQty]=useState(1),[busy,setBusy]=useState(false),[error,setError]=useState(''),[ok,setOk]=useState('')
  const canSubmit=['super_admin','admin','branch_admin','lead','lead_sales','assistant'].includes(user.role)
+ const canAssignStaff=['super_admin','admin','branch_admin'].includes(user.role)
 
  useEffect(()=>{(async()=>{try{
    const [p,s]=await Promise.all([
     supabase.from('products').select('id,en,am,rate').order('en'),
-    supabase.from('profiles').select('id,full_name,phone,role').eq('active',true).in('role',['lead','lead_sales','assistant','driver']).eq('organization_id',user.organization_id).eq('branch_id',user.branch_id).order('full_name')
+    canAssignStaff ? supabase.from('profiles').select('id,full_name,phone,role').eq('active',true).in('role',['lead','lead_sales','assistant','driver']).eq('organization_id',user.organization_id).eq('branch_id',user.branch_id).order('full_name') : Promise.resolve({data:[],error:null})
    ])
    if(p.error)throw p.error
    if(s.error)throw s.error
@@ -53,7 +54,7 @@ export function SalesPage({user}){
     <label className="text-sm">ብዛት<input className="input mt-1" type="number" min="1" step="1" value={qty} onChange={e=>setQty(e.target.value)}/></label>
     <div className="flex items-end"><button type="button" onClick={add} className="btn w-full">ወደ ዝርዝር ጨምር</button></div>
    </div>
-   {['super_admin','admin','branch_admin'].includes(user.role)&&<div className="grid gap-3 rounded-2xl border bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900 md:grid-cols-3">
+   {canAssignStaff&&<div className="grid gap-3 rounded-2xl border bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900 md:grid-cols-3">
     <Person label="መሪ ሻጭ" value={leadId} onChange={setLeadId} options={staffByRole('lead')}/>
     <Person label="ረዳት" value={assistantId} onChange={setAssistantId} options={staffByRole('assistant')}/>
     <Person label="ሾፌር" value={driverId} onChange={setDriverId} options={staffByRole('driver')}/>
