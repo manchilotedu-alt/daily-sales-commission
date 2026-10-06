@@ -16,8 +16,9 @@ Deno.serve(async req=>{
    if(!global&&(org!==cp.organization_id||branch!==cp.branch_id))return out({error:'Forbidden'},403)
    const {data:b}=await a.from('branches').select('id,organization_id,active').eq('id',branch).maybeSingle();if(!b?.active||b.organization_id!==org)return out({error:'Invalid branch'},400)
    if(body.role==='branch_admin'){const {data:x}=await a.from('profiles').select('id').eq('branch_id',branch).eq('role','branch_admin').eq('active',true).limit(1);if(x?.length)return out({error:'This branch already has an active Branch Admin'},409)}
-   const {data:u,error:ue}=await a.auth.admin.createUser({phone:normalize(body.phone),password:body.password,phone_confirm:true,user_metadata:{full_name:body.full_name}});if(ue)return out({error:ue.message},400)
-   const {error:pe}=await a.from('profiles').upsert({id:u.user.id,full_name:body.full_name,phone:normalize(body.phone),role:body.role,active:true,organization_id:org,branch_id:branch});if(pe){await a.auth.admin.deleteUser(u.user.id);return out({error:pe.message},400)}
+   const phone=normalize(body.phone);if(!/^\\+2519\\d{8}$/.test(phone))return out({error:'Valid Ethiopian phone number is required'},400)
+   const {data:u,error:ue}=await a.auth.admin.createUser({phone,password:body.password,phone_confirm:true,user_metadata:{full_name:body.full_name}});if(ue)return out({error:ue.message},400)
+   const {error:pe}=await a.from('profiles').upsert({id:u.user.id,full_name:body.full_name,phone,role:body.role,active:true,organization_id:org,branch_id:branch});if(pe){await a.auth.admin.deleteUser(u.user.id);return out({error:pe.message},400)}
    return out({ok:true,user_id:u.user.id})
   }
   const id=body.user_id;if(!id)return out({error:'user_id is required'},400)
