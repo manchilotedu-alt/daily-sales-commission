@@ -109,6 +109,9 @@ create policy profiles_select on public.profiles for select using(id=auth.uid() 
 drop policy if exists profiles_update on public.profiles;
 create policy profiles_update on public.profiles for update using(id=auth.uid() or public.is_super_admin() or (public.is_branch_admin() and organization_id=public.current_organization_id() and branch_id=public.current_branch_id())) with check(id=auth.uid() or public.is_super_admin() or (public.is_branch_admin() and organization_id=public.current_organization_id() and branch_id=public.current_branch_id()));
 
+drop policy if exists admin_update on public.sales;
+drop policy if exists authenticated_insert on public.sales;
+drop policy if exists own_sales_select on public.sales;
 drop policy if exists sales_select on public.sales;
 create policy sales_select on public.sales for select using(
  id is not null and (public.is_super_admin() or submitted_by=auth.uid() or
