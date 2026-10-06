@@ -3,7 +3,7 @@ name: Commission Portal CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "rebuild-v1" ]
   pull_request:
     branches: [ "main" ]
 
