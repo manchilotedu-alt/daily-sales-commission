@@ -48,7 +48,7 @@ Deno.serve(async (req) => {
 
     const { data: caller, error: callerError } = await admin
       .from('profiles')
-      .select('id,role,branch_id,active')
+      .select('id,role,organization_id,branch_id,active')
       .eq('id', authData.user.id)
       .single()
 
@@ -56,6 +56,7 @@ Deno.serve(async (req) => {
 
     const isSuperAdmin = ['super_admin', 'admin'].includes(caller.role)
     const isBranchAdmin = caller.role === 'branch_admin'
+    const callerOrg = caller.organization_id
     if (!isSuperAdmin && !isBranchAdmin) return json({ error: 'Forbidden' }, 403)
 
     const body = await req.json()
@@ -67,6 +68,7 @@ Deno.serve(async (req) => {
       const fullName = String(body.full_name || '').trim()
       const role = String(body.role || 'assistant')
       const branchId = isBranchAdmin ? caller.branch_id : (body.branch_id || null)
+      const organizationId = isBranchAdmin ? callerOrg : (body.organization_id || null)
 
       if (!fullName || !phone || password.length < 6) {
         return json({ error: 'Name, valid phone and password (minimum 6 characters) are required' }, 400)
@@ -74,6 +76,10 @@ Deno.serve(async (req) => {
       if (!allowedTarget(role)) return json({ error: 'This role cannot be created from this screen' }, 400)
       if (isBranchAdmin && role === 'branch_admin') return json({ error: 'Branch Admin cannot create another Branch Admin' }, 403)
       if (!branchId) return json({ error: 'A branch is required' }, 400)
+      if (!organizationId) return json({ error: 'An organization is required' }, 400)
+
+      const { data: branch, error: branchError } = await admin.from('branches').select('id,organization_id,active').eq('id', branchId).single()
+      if (branchError || !branch || branch.active === false || branch.organization_id !== organizationId) return json({ error: 'Branch does not belong to the selected organization' }, 400)
 
       const { data: created, error: createError } = await admin.auth.admin.createUser({
         phone,
@@ -85,9 +91,9 @@ Deno.serve(async (req) => {
 
       const { data: profile, error: profileError } = await admin
         .from('profiles')
-        .update({ full_name: fullName, phone, role, branch_id: branchId, active: true })
+        .update({ full_name: fullName, phone, role, organization_id: organizationId, branch_id: branchId, active: true })
         .eq('id', created.user.id)
-        .select('id,full_name,phone,role,branch_id,active,created_at')
+        .select('id,full_name,phone,role,organization_id,branch_id,active,created_at')
         .single()
 
       if (profileError) {
@@ -103,13 +109,13 @@ Deno.serve(async (req) => {
 
     const { data: target, error: targetError } = await admin
       .from('profiles')
-      .select('id,full_name,phone,role,branch_id,active')
+      .select('id,full_name,phone,role,organization_id,branch_id,active')
       .eq('id', userId)
       .single()
 
     if (targetError || !target) return json({ error: 'User not found' }, 404)
 
-    if (!isSuperAdmin && target.branch_id !== caller.branch_id) {
+    if (!isSuperAdmin && (target.organization_id !== callerOrg || target.branch_id !== caller.branch_id)) {
       return json({ error: 'You can manage users in your branch only' }, 403)
     }
 
@@ -131,7 +137,7 @@ Deno.serve(async (req) => {
         .from('profiles')
         .update({ active })
         .eq('id', userId)
-        .select('id,full_name,phone,role,branch_id,active')
+        .select('id,full_name,phone,role,organization_id,branch_id,active')
         .single()
       if (error) return json({ error: error.message }, 400)
       return json({ profile })
@@ -140,14 +146,20 @@ Deno.serve(async (req) => {
     if (operation === 'update') {
       const nextRole = String(body.role || target.role)
       const nextBranch = isBranchAdmin ? caller.branch_id : (body.branch_id ?? target.branch_id)
+      const nextOrganization = isBranchAdmin ? callerOrg : (body.organization_id ?? target.organization_id)
       if (!allowedTarget(nextRole)) return json({ error: 'Invalid target role' }, 400)
       if (isBranchAdmin && nextRole === 'branch_admin') return json({ error: 'Branch Admin cannot assign Branch Admin role' }, 403)
       if (!nextBranch) return json({ error: 'A branch is required' }, 400)
+      if (!nextOrganization) return json({ error: 'An organization is required' }, 400)
+
+      const { data: branch, error: branchError } = await admin.from('branches').select('id,organization_id,active').eq('id', nextBranch).single()
+      if (branchError || !branch || branch.active === false || branch.organization_id !== nextOrganization) return json({ error: 'Branch does not belong to the selected organization' }, 400)
 
       const patch = {
         full_name: String(body.full_name || target.full_name).trim(),
         phone: normalizePhone(body.phone || target.phone),
         role: nextRole,
+        organization_id: nextOrganization,
         branch_id: nextBranch,
       }
       const { data: profile, error } = await admin
