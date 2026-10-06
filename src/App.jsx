@@ -11,7 +11,7 @@ const ROLE = {
 
 const labels = {
   am: {
-    brand:'አገልግል',
+    brand:'Dirsha-ድርሻ',
     subtitle:'የኮሚሽን እና ሽያጭ ስርጭት ስርዓት',
     login:'ግባ',
     phone:'ስልክ ቁጥር',
@@ -53,7 +53,7 @@ const labels = {
     reportsDesc:'የቅርንጫፍ እና የአጠቃላይ ሪፖርቶች',
   },
   en: {
-    brand:'Agelgil',
+    brand:'Dirsha-ድርሻ',
     subtitle:'Commission & Sales Distribution System',
     login:'Sign In',
     phone:'Phone Number',
@@ -140,7 +140,7 @@ function roleCapabilities(role){
 async function getProfile(userId){
   const { data, error } = await supabase
     .from('profiles')
-    .select('id,full_name,phone,role,active,branch_id')
+    .select('id,full_name,phone,role,active,organization_id,branch_id')
     .eq('id', userId)
     .maybeSingle()
   if(error) throw error
@@ -181,7 +181,7 @@ function Login({lang,setLang,onLogin}){
     <div className="mx-auto flex min-h-[85vh] max-w-md items-center justify-center">
       <section className="w-full rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500/10 text-2xl font-black text-emerald-400">A</div>
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500/10 text-2xl font-black text-emerald-400">D</div>
           <h1 className="text-3xl font-black tracking-tight">{t.brand}</h1>
           <p className="mt-2 text-sm text-slate-400">{t.subtitle}</p>
         </div>
@@ -207,6 +207,7 @@ function Login({lang,setLang,onLogin}){
 function Shell({user,lang,setLang,onLogout}){
   const t = labels[lang]
   const [page,setPage] = useState('dashboard')
+  const scopeLabel = user.organization_id ? `Organization: ${user.organization_id}` : ''
   const caps = roleCapabilities(user.role)
   const pages = caps.pages
   const cards = [
@@ -242,7 +243,7 @@ function Shell({user,lang,setLang,onLogout}){
           <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">{t.welcome}, {user.full_name}</p>
           <h1 className="mt-1 text-2xl font-black">{t.systemReady}</h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600 dark:text-slate-300">{t.foundation}</p>
-          <div className="mt-4 inline-flex rounded-full bg-white px-3 py-1.5 text-xs font-bold text-slate-700 shadow-sm dark:bg-slate-900 dark:text-slate-200">{user.branch_id ? `Branch: ${user.branch_id}` : t.noBranch} · {roleLabel(user.role,lang)}</div>
+          <div className="mt-4 inline-flex rounded-full bg-white px-3 py-1.5 text-xs font-bold text-slate-700 shadow-sm dark:bg-slate-900 dark:text-slate-200">{scopeLabel}{scopeLabel && ' · '}{user.branch_id ? `Branch: ${user.branch_id}` : t.noBranch} · {roleLabel(user.role,lang)}</div>
         </section>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {visibleCards.map(([key,desc,icon])=><button key={key} onClick={()=>setPage(key)} className="text-left rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:border-slate-800 dark:bg-slate-900">
