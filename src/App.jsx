@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { supabase } from './lib/supabase'
+import { OrganizationManagement, UserManagement } from './Management'
 
 const ROLE = {
   SUPER_ADMIN: 'super_admin',
@@ -252,7 +253,7 @@ function Shell({user,lang,setLang,onLogout}){
         </div>
       </>}
 
-      {page!=='dashboard' && <section className="rounded-2xl border border-slate-200 bg-white p-8 text-center dark:border-slate-800 dark:bg-slate-900">
+      {page==='branches' && user.role==='super_admin' ? <OrganizationManagement lang={lang}/> : page==='users' && (user.role==='super_admin' || user.role==='branch_admin') ? <UserManagement user={user} lang={lang}/> : page!=='dashboard' && <section className="rounded-2xl border border-slate-200 bg-white p-8 text-center dark:border-slate-800 dark:bg-slate-900">
         <div className="text-4xl">{page==='users'?'👥':page==='branches'?'🏢':page==='sales'?'🧾':page==='commission'?'💰':page==='reports'?'📊':'⚙️'}</div>
         <h2 className="mt-4 text-xl font-black">{t[page]}</h2>
         <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-slate-500 dark:text-slate-400">{t[page==='users'?'usersDesc':page==='branches'?'branchDesc':page==='sales'?'salesDesc':page==='commission'?'commissionDesc':page==='reports'?'reportsDesc':'foundation']}</p>
