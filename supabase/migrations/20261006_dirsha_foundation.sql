@@ -143,3 +143,24 @@ end; $$;
 create or replace function public.is_admin() returns boolean language sql stable security definer set search_path=public as $$
  select public.is_super_admin();
 $$;
+
+
+-- Sale items are written only by the trusted create-sale function.
+alter table public.sale_items enable row level security;
+drop policy if exists sale_items_select on public.sale_items;
+create policy sale_items_select on public.sale_items for select using(
+ exists(
+   select 1 from public.sales s
+   where s.id=sale_items.sale_id
+   and (public.is_super_admin() or s.submitted_by=auth.uid() or
+        (public.is_branch_admin() and s.organization_id=public.current_organization_id() and s.branch_id=public.current_branch_id()))
+ )
+);
+drop policy if exists sale_items_insert on public.sale_items;
+drop policy if exists sale_items_update on public.sale_items;
+drop policy if exists sale_items_delete on public.sale_items;
+
+-- Only the trusted server function creates sale rows/items; clients cannot inject
+-- totals or commission amounts directly.
+drop policy if exists sales_direct_insert on public.sales;
+drop policy if exists sales_direct_update on public.sales;
