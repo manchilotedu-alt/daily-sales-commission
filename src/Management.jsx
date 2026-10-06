@@ -61,11 +61,33 @@ export function OrganizationManagement({ lang }) {
     } catch (e) { setError(e.message) } finally { setBusy(false) }
   }
 
-  async function renameBranch(branch) {
+  async async function renameBranch(branch) {
     const name = window.prompt(am ? 'አዲስ የቅርንጫፍ ስም' : 'New branch name', branch.name)
     if (!name?.trim()) return
     const { error } = await supabase.from('branches').update({ name: name.trim() }).eq('id', branch.id)
     if (error) setError(error.message); else await load()
+  }
+
+  async function assignBranchAdmin(branch) {
+    const name = window.prompt(am ? 'የBranch Admin ሙሉ ስም' : 'Branch Admin full name')
+    if (!name?.trim()) return
+    const phone = window.prompt(am ? 'የስልክ ቁጥር' : 'Phone number')
+    if (!phone?.trim()) return
+    const password = window.prompt(am ? 'የመጀመሪያ የይለፍ ቃል' : 'Initial password')
+    if (!password) return
+    setBusy(true); setError('')
+    try {
+      await callManageUser({
+        operation: 'create',
+        full_name: name.trim(),
+        phone: phone.trim(),
+        password,
+        role: 'branch_admin',
+        branch_id: branch.id,
+        organization_id: branch.organization_id
+      })
+      await load()
+    } catch (e) { setError(e.message) } finally { setBusy(false) }
   }
 
   return <section className="space-y-5">
@@ -93,7 +115,7 @@ export function OrganizationManagement({ lang }) {
             </div>
           </div>
           <div className="mt-4 grid gap-2">
-            {bs.map(b=><div key={b.id} className="flex items-center justify-between rounded-xl bg-slate-50 p-3 dark:bg-slate-800/60"><div><span className="font-bold">{b.name}</span><span className="ml-2 text-xs text-slate-500">{b.code || ''}</span></div><div className="flex gap-2"><button onClick={()=>renameBranch(b)} className="rounded-lg border px-2 py-1 text-xs">{am?'ስም ቀይር':'Rename'}</button><button onClick={()=>supabase.from('branches').update({active:!b.active}).eq('id',b.id).then(({error})=>error?setError(error.message):load())} className="rounded-lg border px-2 py-1 text-xs">{b.active?(am?'አቦዝን':'Deactivate'):(am?'አንቃ':'Activate')}</button></div></div>)}
+            {bs.map(b=><div key={b.id} className="flex items-center justify-between rounded-xl bg-slate-50 p-3 dark:bg-slate-800/60"><div><span className="font-bold">{b.name}</span><span className="ml-2 text-xs text-slate-500">{b.code || ''}</span></div><div className="flex gap-2"><button onClick={()=>renameBranch(b)} className="rounded-lg border px-2 py-1 text-xs">{am?'ስም ቀይር':'Rename'}</button><button onClick={()=>assignBranchAdmin(b)} disabled={busy || !b.active} className="rounded-lg border px-2 py-1 text-xs">{am?'Branch Admin መመደብ':'Assign Branch Admin'}</button><button onClick={()=>supabase.from('branches').update({active:!b.active}).eq('id',b.id).then(({error})=>error?setError(error.message):load())} className="rounded-lg border px-2 py-1 text-xs">{b.active?(am?'አቦዝን':'Deactivate'):(am?'አንቃ':'Activate')}</button></div></div>)}
           </div>
         </div>
       })}
