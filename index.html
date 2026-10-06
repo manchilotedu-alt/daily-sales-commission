@@ -1,88 +1,14 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="am">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>አገልግል</title>
-<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-<script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-zinc-950">
-<div id="root"></div>
-<script type="text/babel">
-const {useState,useEffect}=React;
-const SUPABASE_URL='https://cfjdhbldbmrzfgwzeran.supabase.co';
-const SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNmamRoYmxkYm1yemZnd3plcmFuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYyOTI5NDcsImV4cCI6MjEwMTg2ODk0N30.IodZLHxIm-sJl8utu6tIq0LBjFNMJKmNRQ3pYcLmUYA';
-let sbToken=localStorage.getItem('csd_sb_token')||null;
-async function sbReq(path,opts={}){const{method='GET',body,auth=true}=opts;const headers={apikey:SUPABASE_ANON_KEY,'Content-Type':'application/json'};if(auth)headers.Authorization=`Bearer ${sbToken||SUPABASE_ANON_KEY}`;const res=await fetch(`${SUPABASE_URL}${path}`,{method,headers,body:body?JSON.stringify(body):undefined});if(!res.ok)throw new Error('HTTP '+res.status);if(res.status===204)return null;const txt=await res.text();return txt?JSON.parse(txt):null}
-function normalizePhone(p){let d=String(p).replace(/\D/g,'');if(d.startsWith('251'))d='0'+d.slice(3);return d}
-function App(){
-const[lang,setLang]=useState('am');
-const[user,setUser]=useState(null);
-const[loading,setLoading]=useState(true);
-const[error,setError]=useState('');
-const[loginLoading,setLoginLoading]=useState(false);
-useEffect(()=>{(async()=>{try{const uid=localStorage.getItem('csd_sb_uid');if(uid&&sbToken){const rows=await sbReq(`/rest/v1/profiles?id=eq.${uid}&select=*`);if(rows&&rows[0]&&rows[0].active)setUser({id:rows[0].id,phone:rows[0].phone||'',name:rows[0].full_name,role:rows[0].role})}}finally{setLoading(false)}})()},[]);
-const handleLogin=async(e)=>{e.preventDefault();setLoginLoading(true);setError('');try{const data=await sbReq('/auth/v1/token?grant_type=password',{method:'POST',auth:false,body:{email:`${normalizePhone(e.target.phone.value)}@agelgil.com`,password:e.target.password.value}});sbToken=data.access_token;localStorage.setItem('csd_sb_token',sbToken);localStorage.setItem('csd_sb_uid',data.user.id);const rows=await sbReq(`/rest/v1/profiles?id=eq.${data.user.id}&select=*`);if(rows&&rows[0])setUser({id:rows[0].id,phone:e.target.phone.value,name:rows[0].full_name,role:rows[0].role})}catch(err){setError('ስህተት: '+err.message)}finally{setLoginLoading(false)}};
-const handleLogout=async()=>{try{await sbReq('/auth/v1/logout',{method:'POST'})}catch{}sbToken=null;localStorage.removeItem('csd_sb_token');localStorage.removeItem('csd_sb_uid');setUser(null)};
-if(loading)return<div className="flex h-screen items-center justify-center bg-zinc-950"><div className="h-8 w-8 animate-spin rounded-full border-2 border-emerald-600 border-t-transparent"></div></div>;
-if(!user)return(
-<div className="flex min-h-screen items-center justify-center bg-zinc-950 p-4">
-<div className="w-full max-w-md rounded-xl border border-zinc-800 bg-zinc-900 p-6 text-zinc-100">
-<div className="text-center mb-6">
-<h1 className="text-3xl font-bold text-emerald-500 mb-2">አገልግል</h1>
-<p className="text-sm text-zinc-400">የኮሚሽን እና ሽያጭ ስርጭት ስርዓት</p>
-</div>
-<form onSubmit={handleLogin} className="space-y-4">
-<div>
-<label className="block text-xs font-semibold uppercase text-zinc-500 mb-1">ስልክ ቁጥር</label>
-<input name="phone" type="tel" defaultValue="0911000001" required className="h-11 w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 text-sm outline-none focus:ring-2 focus:ring-emerald-500"/>
-</div>
-<div>
-<label className="block text-xs font-semibold uppercase text-zinc-500 mb-1">የይለፍ ቃል</label>
-<input name="password" type="password" defaultValue="demo123" required className="h-11 w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 text-sm outline-none focus:ring-2 focus:ring-emerald-500"/>
-</div>
-{error&&<div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs">{error}</div>}
-<button type="submit" disabled={loginLoading} className="w-full h-11 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium disabled:opacity-50">{loginLoading?'በመጫን ላይ...':'ግባ'}</button>
-</form>
-<div className="mt-6 pt-4 border-t border-zinc-800 text-center">
-<p className="text-xs text-zinc-500">የተሰራው በ <span className="text-emerald-500 font-medium">manchilotabd</span></p>
-</div>
-</div>
-</div>
-);
-return(
-<div className="min-h-screen bg-zinc-950 text-zinc-100">
-<header className="border-b border-zinc-800 bg-zinc-900 px-6 py-4 flex items-center justify-between">
-<h1 className="text-lg font-bold text-emerald-400">አገልግል</h1>
-<button onClick={handleLogout} className="px-3 py-1.5 rounded-lg border border-zinc-700 text-sm">ውጣ</button>
-</header>
-<div className="p-6 max-w-7xl mx-auto">
-<h2 className="text-2xl font-bold mb-4">እንኳን ደህና መጡ, {user.name}! 👋</h2>
-<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-<div className="rounded-xl border border-zinc-800 bg-zinc-900 p-5">
-<p className="text-xs text-zinc-500 mb-1">በዚህ ወር</p>
-<p className="text-2xl font-bold">0 ብር</p>
-</div>
-<div className="rounded-xl border border-zinc-800 bg-zinc-900 p-5">
-<p className="text-xs text-zinc-500 mb-1">የሽያጭ መዝገቦች</p>
-<p className="text-2xl font-bold">0</p>
-</div>
-<div className="rounded-xl border border-zinc-800 bg-zinc-900 p-5">
-<p className="text-xs text-zinc-500 mb-1">ሚና</p>
-<p className="text-2xl font-bold">{user.role}</p>
-</div>
-</div>
-</div>
-<footer className="mt-12 py-6 border-t border-zinc-800 text-center">
-<p className="text-xs text-zinc-500">አገልግል © {new Date().getFullYear()} · የተሰራው በ <a href="https://github.com/manchilotabd" className="text-emerald-500 hover:underline">manchilotabd</a></p>
-</footer>
-</div>
-)
-}
-ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
-</script>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#111827" />
+    <meta name="description" content="Agelgil Commission and Sales Distribution System" />
+    <title>አገልግል — Commission Portal</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
 </html>
