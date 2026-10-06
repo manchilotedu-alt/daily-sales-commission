@@ -36,16 +36,21 @@ export default function App(){
 
  const login=async e=>{
   e.preventDefault();setError('')
-  const phone=normalizePhone(e.currentTarget.phone.value),password=e.currentTarget.password.value
-  if(!phone){setError('ስልክ ቁጥር ያስገቡ');return}
-  try{const {data,error}=await supabase.auth.signInWithPassword({phone,password});if(error)throw error;setUser(await loadProfile(data.user.id))}catch(e){setError(errorText(e))}
+  const identifier=String(e.currentTarget.identifier.value||'').trim(),password=e.currentTarget.password.value
+  if(!identifier){setError('ስልክ ቁጥር ወይም ኢሜይል ያስገቡ');return}
+  try{
+   const credentials=identifier.includes('@')?{email:identifier,password}:{phone:normalizePhone(identifier),password}
+   const {data,error}=await supabase.auth.signInWithPassword(credentials)
+   if(error)throw error
+   setUser(await loadProfile(data.user.id))
+  }catch(e){setError(errorText(e))}
  }
  const logout=async()=>{await supabase.auth.signOut();setUser(null);setPage('dashboard')}
 
  if(loading)return <div className="min-h-screen grid place-items-center bg-zinc-950 text-white">በመጫን ላይ…</div>
  if(!user)return <div className="min-h-screen grid place-items-center bg-zinc-950 p-4"><form onSubmit={login} className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900 p-7 text-white shadow-2xl">
   <div className="text-center mb-7"><div className="mx-auto mb-3 grid h-14 w-14 place-items-center rounded-2xl bg-emerald-600 text-2xl font-black">D</div><h1 className="text-3xl font-black text-emerald-400">Dirsha-ድርሻ</h1><p className="mt-2 text-sm text-zinc-400">እንኳን ወደ Dirsha-ድርሻ መጡ</p></div>
-  <label className="block text-sm mb-1">ስልክ ቁጥር</label><input name="phone" type="tel" inputMode="tel" autoComplete="tel" placeholder="09XXXXXXXX" required className="input"/>
+  <label className="block text-sm mb-1">ስልክ ቁጥር ወይም ኢሜይል</label><input name="identifier" type="text" inputMode="email" autoComplete="username" placeholder="09XXXXXXXX ወይም admin@example.com" required className="input"/>
   <label className="block text-sm mb-1 mt-4">የይለፍ ቃል</label><input name="password" type="password" autoComplete="current-password" required className="input"/>
   {error&&<div className="mt-4 rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-300">{error}</div>}
   <button className="btn mt-5 w-full" type="submit">ግባ</button>
