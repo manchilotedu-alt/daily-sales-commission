@@ -1,7 +1,7 @@
 import React,{useEffect,useMemo,useState} from 'react'
 import {supabase} from './lib/supabase'
 const roles={branch_admin:'የቅርንጫፍ አስተዳዳሪ',lead:'መሪ ሻጭ',lead_sales:'መሪ ሻጭ',assistant:'ረዳት',driver:'ሾፌር'}
-async function manageUser(payload){const {data:{session}}=await supabase.auth.getSession();const r=await fetch('/functions/v1/manage-user',{method:'POST',headers:{Authorization:`Bearer ${session?.access_token||''}`,'Content-Type':'application/json'},body:JSON.stringify(payload)});const b=await r.json().catch(()=>({}));if(!r.ok)throw new Error(b.error||'የተጠቃሚ ስራው አልተሳካም');return b}
+async function manageUser(payload){const {data,error}=await supabase.functions.invoke('manage-user',{body:payload});if(error)throw error;if(data?.error)throw new Error(data.error);return data||{ok:true}}
 const Btn=({children,...p})=><button className="btn-secondary" {...p}>{children}</button>
 export function OrganizationManagement(){
  const [orgs,setOrgs]=useState([]),[branches,setBranches]=useState([]),[form,setForm]=useState({name:'',code:'',branch_limit:1}),[busy,setBusy]=useState(false),[error,setError]=useState('')
