@@ -1,6 +1,7 @@
 import React,{useEffect,useState} from 'react'
 import {supabase} from './lib/supabase'
 import {OrganizationManagement,UserManagement} from './Management'
+import {SalesPage} from './Sales'
 
 const roles={
  super_admin:'ዋና አስተዳዳሪ',admin:'ዋና አስተዳዳሪ',branch_admin:'የቅርንጫፍ አስተዳዳሪ',
@@ -58,7 +59,7 @@ export default function App(){
    {page==='dashboard'&&<Dashboard user={user} global={global} branchAdmin={branchAdmin}/>}
    {page==='branches'&&global&&<OrganizationManagement/>}
    {page==='users'&&(global||branchAdmin)&&<UserManagement currentUser={user}/>}
-   {['sales','commissions','reports','profile'].includes(page)&&<Placeholder title={nav[page]}/>}
+   {page==='sales'&&<SalesPage user={user}/>} {['commissions','reports','profile'].includes(page)&&<Placeholder title={nav[page]}/>} 
   </main>
  </div>
 }
