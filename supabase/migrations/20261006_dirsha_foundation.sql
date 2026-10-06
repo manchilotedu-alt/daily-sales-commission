@@ -118,19 +118,7 @@ create policy sales_select on public.sales for select using(
  (public.is_branch_admin() and organization_id=public.current_organization_id() and branch_id=public.current_branch_id()))
 );
 drop policy if exists sales_insert on public.sales;
-create policy sales_insert on public.sales for insert with check(
- public.is_super_admin() or
- (organization_id=public.current_organization_id() and branch_id=public.current_branch_id() and
-  (submitted_by=auth.uid() or public.is_branch_admin()))
-);
 drop policy if exists sales_update on public.sales;
-create policy sales_update on public.sales for update using(
- public.is_super_admin() or
- (public.is_branch_admin() and organization_id=public.current_organization_id() and branch_id=public.current_branch_id())
-) with check(
- public.is_super_admin() or
- (public.is_branch_admin() and organization_id=public.current_organization_id() and branch_id=public.current_branch_id())
-);
 
 create or replace function public.handle_new_user() returns trigger language plpgsql security definer set search_path=public as $$
 begin
