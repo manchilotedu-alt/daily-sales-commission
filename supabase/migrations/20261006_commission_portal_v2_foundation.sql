@@ -12,6 +12,16 @@ create table if not exists public.organizations (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.branches (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  code text,
+  phone text,
+  address text,
+  active boolean not null default true,
+  created_at timestamptz not null default now()
+);
+
 alter table public.branches
   add column if not exists organization_id uuid references public.organizations(id) on delete restrict;
 
@@ -114,6 +124,25 @@ drop trigger if exists branches_enforce_limit on public.branches;
 create trigger branches_enforce_limit
 before insert or update of organization_id on public.branches
 for each row execute function public.enforce_branch_limit();
+
+-- Prevent lowering an organization's branch limit below its current branch count.
+create or replace function public.validate_branch_limit()
+returns trigger language plpgsql security definer set search_path=public as $
+declare
+  used_count integer;
+begin
+  select count(*) into used_count from public.branches where organization_id=new.id;
+  if new.branch_limit < used_count then
+    raise exception 'Branch limit cannot be lower than the current number of branches';
+  end if;
+  return new;
+end;
+$;
+
+drop trigger if exists organizations_validate_branch_limit on public.organizations;
+create trigger organizations_validate_branch_limit
+before update of branch_limit on public.organizations
+for each row execute function public.validate_branch_limit();
 
 -- Organization visibility and management are global Super Admin responsibilities.
 alter table public.organizations enable row level security;
