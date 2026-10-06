@@ -1,137 +1,305 @@
-import React, { useState, useEffect } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
+import { supabase } from './lib/supabase'
 
-/* ================= SUPABASE CONFIG ================= */
-const SUPABASE_URL = 'https://cfjdhbldbmrzfgwzeran.supabase.co'
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNmamRoYmxkYm1yemZnd3plcmFuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYyOTI5NDcsImV4cCI6MjEwMTg2ODk0N30.IodZLHxIm-sJl8utu6tIq0LBjFNMJKmNRQ3pYcLmUYA'
-const TERMS_VERSION = 1
-
-const T = {
-  brand:{en:'Agelgil',am:'አገልግል'},
-  tagline:{en:'Commission & Sales Distribution',am:'የኮሚሽን እና ሽያጭ ስርጭት ስርዓት'},
-  signIn:{en:'Sign In',am:'ግባ'}, phone:{en:'Phone Number',am:'ስልክ ቁጥር'}, password:{en:'Password',am:'የይለፍ ቃል'},
-  invalidCredentials:{en:'Invalid phone or password',am:'ስልክ ቁጥር ወይም የይለፍ ቃል ስህተት ነው'},
-  noProfile:{en:'Your account has no active profile. Please contact an administrator.',am:'አካውንትዎ የነቃ ፕሮፋይል የለውም። አስተዳዳሪን ያነጋግሩ።'},
-  accountDisabled:{en:'This account is disabled. Please contact an administrator.',am:'ይህ አካውንት ታግዷል። አስተዳዳሪን ያነጋግሩ።'},
-  databaseError:{en:'The account service is temporarily unavailable. Please try again.',am:'የአካውንት ስርዓቱ ለጊዜው አይሰራም። እባክዎ እንደገና ይሞክሩ።'},
-  networkError:{en:'Network connection failed. Please check your internet connection.',am:'የኢንተርኔት ግንኙነት ችግር አለ። እባክዎ ግንኙነትዎን ያረጋግጡ።'},
-  genericError:{en:'An error occurred',am:'ስህተት ተከስቷል'}, signOut:{en:'Sign out',am:'ውጣ'},
-  navDashboard:{en:'Dashboard',am:'ዳሽቦርድ'}, navNewSale:{en:'New Sale',am:'አዲስ ሽያጭ'}, navReports:{en:'Reports',am:'ሪፖርቶች'},
-  navProfile:{en:'My Profile',am:'የእኔ መገለጫ'}, navApprovals:{en:'Approvals',am:'ማረጋገጫ'}, navSettings:{en:'Settings',am:'ቅንብሮች'}, navUsers:{en:'Users',am:'ተጠቃሚዎች'},
-  termsTitle:{en:'Mandatory Declaration',am:'ግዴታዊ መግለጫ'}, termsSub:{en:'You must accept before using the app.',am:'አፑን ከመጠቀምዎ በፊት መስማማት አለብዎት።'},
-  termsText:{en:'I confirm that the sales data I enter matches official company records.',am:'እኔ የማስገባው የሽያጭ መረጃ ከድርጅቱ ትክክለኛ ዳታ ጋር አንድ አይነት መሆኑን አረጋግጣለሁ።'},
-  agreeBtn:{en:'I Agree',am:'እስማማለሁ'}, roleAdmin:{en:'Admin',am:'አስተዳዳሪ'}, roleLead:{en:'Lead Sales',am:'መሪ ሻጭ'},
-  roleAssistant:{en:'Assistant',am:'ረዳት'}, roleDriver:{en:'Driver',am:'ሾፌር'}, roleBranchAdmin:{en:'Branch Admin',am:'የቅርንጫፍ አስተዳዳሪ'},
-  roleSuperAdmin:{en:'Super Admin',am:'ዋና አስተዳዳሪ'}, roleUnknown:{en:'User',am:'ተጠቃሚ'}, welcome:{en:'Welcome',am:'እንኳን ደህና መጡ'},
-  loading:{en:'Loading…',am:'በመጫን ላይ…'}, statThisMonth:{en:'This Month',am:'በዚህ ወር'}, statRecords:{en:'Sales Records',am:'የሽያጭ መዝገቦች'},
-  statStaff:{en:'Active Staff',am:'ገቢር ሰራተኞች'}, pendingCount:{en:'Pending',am:'የሚጠብቁ'}, developedBy:{en:'Developed by',am:'የተሰራው በ'},
-  developerName:{en:'manchilotabd',am:'manchilotabd'}, comingSoon:{en:'Coming soon...',am:'በቅርቡ ይጨመራል...'},
+const ROLE = {
+  SUPER_ADMIN: 'super_admin',
+  BRANCH_ADMIN: 'branch_admin',
+  LEAD: 'lead',
+  ASSISTANT: 'assistant',
+  DRIVER: 'driver',
 }
 
-function normalizePhone(phone){ let digits = String(phone).replace(/\D/g, ''); if(digits.startsWith('251')) digits = '0' + digits.slice(3); return digits }
-function getRoleKey(role){
-  const normalized = String(role || '').toLowerCase().replace(/[-\s]/g, '_')
-  return ({admin:'roleAdmin',super_admin:'roleSuperAdmin',branch_admin:'roleBranchAdmin',lead:'roleLead',lead_sales:'roleLead',assistant:'roleAssistant',driver:'roleDriver'})[normalized] || 'roleUnknown'
-}
-function errorKey(error){
-  if(error?.key) return error.key
-  if(!error) return 'genericError'
-  if(error.name === 'TypeError' || /failed to fetch|network/i.test(error.message || '')) return 'networkError'
-  if(/profiles|terms_acceptances|rest\/v1/i.test(error.message || '')) return 'databaseError'
-  return 'genericError'
-}
-
-let sbToken = localStorage.getItem('csd_sb_token') || null
-async function sbReq(path, opts = {}){
-  const { method='GET', body, auth=true } = opts
-  const headers = { apikey: SUPABASE_ANON_KEY, 'Content-Type':'application/json' }
-  if(auth) headers.Authorization = `Bearer ${sbToken || SUPABASE_ANON_KEY}`
-  const res = await fetch(`${SUPABASE_URL}${path}`, {method, headers, body: body ? JSON.stringify(body) : undefined})
-  if(!res.ok){ let msg=''; try{msg=await res.text()}catch{}; throw new Error(msg || 'HTTP '+res.status) }
-  if(res.status === 204) return null
-  const txt = await res.text(); return txt ? JSON.parse(txt) : null
-}
-
-const API = {
-  async login(phone,password){
-    try{
-      const data = await sbReq('/auth/v1/token?grant_type=password',{method:'POST',auth:false,body:{phone:normalizePhone(phone),password}})
-      if(!data?.access_token || !data?.user?.id) throw {key:'invalidCredentials'}
-      sbToken=data.access_token; localStorage.setItem('csd_sb_token',sbToken); localStorage.setItem('csd_sb_uid',data.user.id)
-      const rows=await sbReq(`/rest/v1/profiles?id=eq.${data.user.id}&select=*`)
-      if(!rows?.[0]) throw {key:'noProfile'}
-      if(!rows[0].active) throw {key:'accountDisabled'}
-      return {id:rows[0].id,phone,name:rows[0].full_name,role:rows[0].role,active:true}
-    }catch(e){ if(e?.key) throw e; throw {key:errorKey(e)} }
+const labels = {
+  am: {
+    brand:'አገልግል',
+    subtitle:'የኮሚሽን እና ሽያጭ ስርጭት ስርዓት',
+    login:'ግባ',
+    phone:'ስልክ ቁጥር',
+    password:'የይለፍ ቃል',
+    phoneHint:'09XXXXXXXX ወይም +251XXXXXXXXX',
+    invalid:'ስልክ ቁጥር ወይም የይለፍ ቃል ስህተት ነው።',
+    disabled:'ይህ አካውንት ታግዷል።',
+    noProfile:'የተጠቃሚ ፕሮፋይል አልተገኘም።',
+    network:'የኢንተርኔት ግንኙነት ችግር አለ።',
+    database:'የዳታቤዝ አገልግሎት ለጊዜው አይገኝም።',
+    config:'የስርዓቱ አወቃቀር አልተሟላም።',
+    loading:'በመጫን ላይ…',
+    dashboard:'ዳሽቦርድ',
+    users:'ተጠቃሚዎች',
+    branches:'ቅርንጫፎች',
+    sales:'ሽያጮች',
+    commission:'ኮሚሽን',
+    reports:'ሪፖርቶች',
+    profile:'የእኔ መገለጫ',
+    settings:'ቅንብሮች',
+    welcome:'እንኳን ደህና መጡ',
+    signedInAs:'የገቡት እንደ',
+    signOut:'ውጣ',
+    systemReady:'የስርዓቱ መሠረት ተዘጋጅቷል',
+    foundation:'ይህ የአዲሱ ስርዓት መሠረታዊ ስሪት ነው። የቅርንጫፍ ፍቃድ፣ ተጠቃሚ አስተዳደር፣ ሽያጭ እና ኮሚሽን በተለያዩ ደረጃዎች ይገነባሉ።',
+    noBranch:'ቅርንጫፍ አልተመደበም',
+    roleSuperAdmin:'ዋና አስተዳዳሪ',
+    roleBranchAdmin:'የቅርንጫፍ አስተዳዳሪ',
+    roleLead:'መሪ ሻጭ',
+    roleAssistant:'ረዳት ሻጭ',
+    roleDriver:'ሾፌር',
+    adminScope:'ሁሉንም ቅርንጫፎች ማስተዳደር',
+    branchScope:'የራስዎን ቅርንጫፍ ብቻ ማስተዳደር',
+    upcoming:'ቀጣይ የሚገነባ',
+    usersDesc:'ተጠቃሚዎችን መፍጠር፣ ማረም፣ ማገድ እና የይለፍ ቃል ማስተካከል',
+    branchDesc:'ቅርንጫፎችን እና የቅርንጫፍ አስተዳዳሪዎችን ማስተዳደር',
+    salesDesc:'የሽያጭ መመዝገብ እና የሽያጭ ሂደት',
+    commissionDesc:'የግል እና የቡድን ኮሚሽን ስሌት',
+    reportsDesc:'የቅርንጫፍ እና የአጠቃላይ ሪፖርቶች',
   },
-  async currentUser(){
-    const uid=localStorage.getItem('csd_sb_uid'); if(!uid || !sbToken) return null
+  en: {
+    brand:'Agelgil',
+    subtitle:'Commission & Sales Distribution System',
+    login:'Sign In',
+    phone:'Phone Number',
+    password:'Password',
+    phoneHint:'09XXXXXXXX or +251XXXXXXXXX',
+    invalid:'Invalid phone number or password.',
+    disabled:'This account is disabled.',
+    noProfile:'User profile was not found.',
+    network:'Network connection failed.',
+    database:'Database service is temporarily unavailable.',
+    config:'System configuration is incomplete.',
+    loading:'Loading…',
+    dashboard:'Dashboard',
+    users:'Users',
+    branches:'Branches',
+    sales:'Sales',
+    commission:'Commission',
+    reports:'Reports',
+    profile:'My Profile',
+    settings:'Settings',
+    welcome:'Welcome',
+    signedInAs:'Signed in as',
+    signOut:'Sign out',
+    systemReady:'System foundation is ready',
+    foundation:'This is the foundation of the rebuilt system. Branch permissions, user management, sales and commission will be implemented in controlled stages.',
+    noBranch:'No branch assigned',
+    roleSuperAdmin:'Super Admin',
+    roleBranchAdmin:'Branch Admin',
+    roleLead:'Lead Sales',
+    roleAssistant:'Sales Assistant',
+    roleDriver:'Sales Driver',
+    adminScope:'Manage all branches',
+    branchScope:'Manage your branch only',
+    upcoming:'Coming next',
+    usersDesc:'Create, edit, disable and reset user passwords',
+    branchDesc:'Manage branches and Branch Admins',
+    salesDesc:'Record and process sales',
+    commissionDesc:'Calculate individual and team commission',
+    reportsDesc:'Branch and global reports',
+  }
+}
+
+const roleLabel = (role, lang) => labels[lang][({
+  super_admin:'roleSuperAdmin',
+  branch_admin:'roleBranchAdmin',
+  lead:'roleLead',
+  lead_sales:'roleLead',
+  assistant:'roleAssistant',
+  driver:'roleDriver'
+}[String(role || '').toLowerCase()] || 'roleAssistant')]
+
+function normalizePhone(value){
+  let digits = String(value || '').replace(/\\D/g,'')
+  if(digits.startsWith('251')) digits = '+' + digits
+  else if(digits.startsWith('0')) digits = '+251' + digits.slice(1)
+  else if(!digits.startsWith('+')) digits = '+251' + digits
+  return digits
+}
+
+function friendlyError(error, lang){
+  const message = String(error?.message || '').toLowerCase()
+  if(message.includes('invalid login credentials')) return 'invalid'
+  if(message.includes('user not found') || message.includes('invalid password')) return 'invalid'
+  if(message.includes('failed to fetch') || message.includes('network')) return 'network'
+  if(message.includes('profiles') || message.includes('branch') || message.includes('postgrest')) return 'database'
+  return 'database'
+}
+
+function roleCapabilities(role){
+  if(role === ROLE.SUPER_ADMIN) return {
+    scope: labels.am.adminScope,
+    pages: ['dashboard','branches','users','sales','commission','reports','profile','settings']
+  }
+  if(role === ROLE.BRANCH_ADMIN) return {
+    scope: labels.am.branchScope,
+    pages: ['dashboard','users','sales','commission','reports','profile','settings']
+  }
+  return {
+    scope: '',
+    pages: ['dashboard','sales','commission','reports','profile']
+  }
+}
+
+async function getProfile(userId){
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id,full_name,phone,role,active,branch_id')
+    .eq('id', userId)
+    .maybeSingle()
+  if(error) throw error
+  return data
+}
+
+function Login({lang,setLang,onLogin}){
+  const t = labels[lang]
+  const [phone,setPhone] = useState('')
+  const [password,setPassword] = useState('')
+  const [error,setError] = useState('')
+  const [busy,setBusy] = useState(false)
+
+  async function submit(event){
+    event.preventDefault()
+    setBusy(true); setError('')
     try{
-      const rows=await sbReq(`/rest/v1/profiles?id=eq.${uid}&select=*`)
-      if(!rows?.[0] || !rows[0].active) return null
-      return {id:rows[0].id,phone:rows[0].phone||'',name:rows[0].full_name,role:rows[0].role,active:true}
-    }catch{
-      localStorage.removeItem('csd_sb_token'); localStorage.removeItem('csd_sb_uid'); sbToken=null; return null
+      const {data,error:authError} = await supabase.auth.signInWithPassword({
+        phone: normalizePhone(phone),
+        password
+      })
+      if(authError) throw authError
+      if(!data?.user) throw new Error('Invalid login credentials')
+      const profile = await getProfile(data.user.id)
+      if(!profile) { await supabase.auth.signOut(); throw new Error('profile missing') }
+      if(profile.active === false) { await supabase.auth.signOut(); throw new Error('user disabled') }
+      onLogin({...profile, email:null})
+    }catch(error){
+      if(String(error?.message || '').includes('user disabled')) setError('disabled')
+      else if(String(error?.message || '').includes('profile missing')) setError('noProfile')
+      else setError(friendlyError(error,lang))
+    }finally{
+      setBusy(false)
     }
-  },
-  async logout(){ try{await sbReq('/auth/v1/logout',{method:'POST'})}catch{}; sbToken=null; localStorage.removeItem('csd_sb_token'); localStorage.removeItem('csd_sb_uid') },
-  async hasAcceptedTerms(uid){ const rows=await sbReq(`/rest/v1/terms_acceptances?user_id=eq.${uid}&version=eq.${TERMS_VERSION}&select=id&limit=1`); return !!rows?.[0] },
-  async acceptTerms(uid,lang){ await sbReq('/rest/v1/terms_acceptances',{method:'POST',body:{user_id:uid,language:lang,version:TERMS_VERSION}}) },
+  }
+
+  return <main className="min-h-screen bg-slate-950 px-4 py-8 text-slate-100">
+    <div className="mx-auto flex min-h-[85vh] max-w-md items-center justify-center">
+      <section className="w-full rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
+        <div className="mb-8 text-center">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500/10 text-2xl font-black text-emerald-400">A</div>
+          <h1 className="text-3xl font-black tracking-tight">{t.brand}</h1>
+          <p className="mt-2 text-sm text-slate-400">{t.subtitle}</p>
+        </div>
+        <form onSubmit={submit} className="space-y-4">
+          <label className="block">
+            <span className="mb-2 block text-sm font-semibold">{t.phone}</span>
+            <input value={phone} onChange={e=>setPhone(e.target.value)} inputMode="tel" autoComplete="username" placeholder={t.phoneHint} required className="h-12 w-full rounded-xl border border-slate-700 bg-slate-800 px-4 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20" />
+          </label>
+          <label className="block">
+            <span className="mb-2 block text-sm font-semibold">{t.password}</span>
+            <input value={password} onChange={e=>setPassword(e.target.value)} type="password" autoComplete="current-password" required className="h-12 w-full rounded-xl border border-slate-700 bg-slate-800 px-4 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20" />
+          </label>
+          {error && <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">{t[error] || t.database}</div>}
+          <button disabled={busy} className="h-12 w-full rounded-xl bg-emerald-600 font-bold transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50">{busy ? t.loading : t.login}</button>
+        </form>
+        <button onClick={()=>setLang(lang==='am'?'en':'am')} className="mx-auto mt-5 block rounded-lg px-3 py-2 text-xs font-bold text-slate-400 hover:bg-slate-800">{lang==='am'?'English':'አማርኛ'}</button>
+        <p className="mt-5 text-center text-xs text-slate-500">Phone + Password authentication · No fake email identity</p>
+      </section>
+    </div>
+  </main>
+}
+
+function Shell({user,lang,setLang,onLogout}){
+  const t = labels[lang]
+  const [page,setPage] = useState('dashboard')
+  const caps = roleCapabilities(user.role)
+  const pages = caps.pages
+  const cards = [
+    ['users','usersDesc','👥'],
+    ['branches','branchDesc','🏢'],
+    ['sales','salesDesc','🧾'],
+    ['commission','commissionDesc','💰'],
+    ['reports','reportsDesc','📊'],
+  ]
+  const visibleCards = cards.filter(([key]) => pages.includes(key))
+
+  return <div className="min-h-screen bg-slate-100 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
+    <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-900/95">
+      <div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
+        <div>
+          <div className="font-black text-emerald-600 dark:text-emerald-400">{t.brand}</div>
+          <div className="text-xs text-slate-500">{roleLabel(user.role,lang)}</div>
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={()=>setLang(lang==='am'?'en':'am')} className="rounded-lg px-3 py-2 text-xs font-bold hover:bg-slate-100 dark:hover:bg-slate-800">{lang==='am'?'EN':'አማ'}</button>
+          <button onClick={onLogout} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">{t.signOut}</button>
+        </div>
+      </div>
+    </header>
+
+    <main className="mx-auto max-w-7xl px-4 py-5 pb-10">
+      <nav className="mb-5 flex gap-2 overflow-x-auto pb-1">
+        {pages.map(key=><button key={key} onClick={()=>setPage(key)} className={`whitespace-nowrap rounded-xl px-3 py-2 text-sm font-bold ${page===key?'bg-emerald-600 text-white':'bg-white text-slate-600 hover:bg-slate-200 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800'}`}>{t[key]}</button>)}
+      </nav>
+
+      {page==='dashboard' && <>
+        <section className="mb-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-5 dark:border-emerald-900/50 dark:bg-emerald-950/20">
+          <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">{t.welcome}, {user.full_name}</p>
+          <h1 className="mt-1 text-2xl font-black">{t.systemReady}</h1>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600 dark:text-slate-300">{t.foundation}</p>
+          <div className="mt-4 inline-flex rounded-full bg-white px-3 py-1.5 text-xs font-bold text-slate-700 shadow-sm dark:bg-slate-900 dark:text-slate-200">{user.branch_id ? `Branch: ${user.branch_id}` : t.noBranch} · {roleLabel(user.role,lang)}</div>
+        </section>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {visibleCards.map(([key,desc,icon])=><button key={key} onClick={()=>setPage(key)} className="text-left rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:border-slate-800 dark:bg-slate-900">
+            <div className="text-2xl">{icon}</div><h2 className="mt-3 font-black">{t[key]}</h2><p className="mt-1 text-sm leading-5 text-slate-500 dark:text-slate-400">{t[desc]}</p>
+          </button>)}
+        </div>
+      </>}
+
+      {page!=='dashboard' && <section className="rounded-2xl border border-slate-200 bg-white p-8 text-center dark:border-slate-800 dark:bg-slate-900">
+        <div className="text-4xl">{page==='users'?'👥':page==='branches'?'🏢':page==='sales'?'🧾':page==='commission'?'💰':page==='reports'?'📊':'⚙️'}</div>
+        <h2 className="mt-4 text-xl font-black">{t[page]}</h2>
+        <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-slate-500 dark:text-slate-400">{t[page==='users'?'usersDesc':page==='branches'?'branchDesc':page==='sales'?'salesDesc':page==='commission'?'commissionDesc':page==='reports'?'reportsDesc':'foundation']}</p>
+        <div className="mt-5 rounded-xl bg-slate-50 p-4 text-xs font-semibold text-slate-500 dark:bg-slate-800/50 dark:text-slate-400">{t.upcoming}</div>
+      </section>}
+    </main>
+  </div>
 }
 
 export default function App(){
-  const [lang,setLang]=useState('am'),[theme,setTheme]=useState('dark'),[user,setUser]=useState(null),[loading,setLoading]=useState(true)
-  const [page,setPage]=useState('dashboard'),[accepted,setAccepted]=useState(true),[loginError,setLoginError]=useState(''),[loginLoading,setLoginLoading]=useState(false),[termsError,setTermsError]=useState('')
-  const t=key=>T[key]?.[lang]||key
-  useEffect(()=>{document.documentElement.classList.toggle('dark',theme==='dark')},[theme])
-  useEffect(()=>{(async()=>{try{const u=await API.currentUser();if(u){setUser(u);setAccepted(await API.hasAcceptedTerms(u.id))}}catch{setUser(null);setAccepted(true)}finally{setLoading(false)}})()},[])
+  const [lang,setLang] = useState('am')
+  const [user,setUser] = useState(null)
+  const [loading,setLoading] = useState(true)
+  const [fatal,setFatal] = useState('')
 
-  const handleLogin=async e=>{
-    e.preventDefault();setLoginLoading(true);setLoginError('')
-    try{const u=await API.login(e.target.phone.value,e.target.password.value);setUser(u);setAccepted(await API.hasAcceptedTerms(u.id))}
-    catch(err){setLoginError(errorKey(err));setUser(null)}finally{setLoginLoading(false)}
+  useEffect(()=>{
+    let active = true
+    ;(async()=>{
+      try{
+        const {data,error} = await supabase.auth.getSession()
+        if(error) throw error
+        if(data.session?.user){
+          const profile = await getProfile(data.session.user.id)
+          if(profile && profile.active !== false && active) setUser(profile)
+        }
+      }catch(error){
+        if(active) setFatal(friendlyError(error,lang))
+      }finally{
+        if(active) setLoading(false)
+      }
+    })()
+    const {data:listener} = supabase.auth.onAuthStateChange(async (_event,session)=>{
+      if(!session){ if(active) setUser(null); return }
+      try{
+        const profile = await getProfile(session.user.id)
+        if(active && profile && profile.active !== false) setUser(profile)
+      }catch{}
+    })
+    return ()=>{ active=false; listener.subscription.unsubscribe() }
+  },[])
+
+  async function logout(){
+    await supabase.auth.signOut()
+    setUser(null)
   }
-  const handleLogout=async()=>{await API.logout();setUser(null);setPage('dashboard')}
-  const handleAcceptTerms=async()=>{if(!user)return;setTermsError('');try{await API.acceptTerms(user.id,lang);setAccepted(true)}catch(err){setTermsError(errorKey(err))}}
 
-  if(loading)return <div className="flex h-screen items-center justify-center bg-zinc-950"><div className="h-8 w-8 animate-spin rounded-full border-2 border-emerald-600 border-t-transparent"></div></div>
-
-  if(!user)return <div className="flex min-h-screen items-center justify-center bg-zinc-950 p-4"><div className="w-full max-w-md rounded-xl border border-zinc-800 bg-zinc-900 p-6 text-zinc-100">
-    <div className="text-center mb-6"><h1 className="text-3xl font-bold text-emerald-500 mb-2">{t('brand')}</h1><p className="text-sm text-zinc-400">{t('tagline')}</p></div>
-    <form onSubmit={handleLogin} className="space-y-4">
-      <div><label className="block text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-1">{t('phone')}</label><input name="phone" type="tel" defaultValue="0911000001" placeholder="09XXXXXXXX" required className="h-11 w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 text-sm outline-none focus:ring-2 focus:ring-emerald-500"/></div>
-      <div><label className="block text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-1">{t('password')}</label><input name="password" type="password" defaultValue="demo123" required className="h-11 w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 text-sm outline-none focus:ring-2 focus:ring-emerald-500"/></div>
-      {loginError&&<div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs">{t(loginError)}</div>}
-      <button type="submit" disabled={loginLoading} className="w-full h-11 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium disabled:opacity-50">{loginLoading?t('loading'):t('signIn')}</button>
-    </form>
-    <div className="mt-6 pt-4 border-t border-zinc-800 text-center"><p className="text-xs text-zinc-500">{t('developedBy')} <span className="text-emerald-500 font-medium">{t('developerName')}</span></p></div>
-  </div></div>
-
-  if(!accepted)return <div className="flex min-h-screen items-center justify-center bg-zinc-950 p-4"><div className="w-full max-w-lg rounded-xl border border-zinc-800 bg-zinc-900 p-6 text-zinc-100">
-    <h2 className="text-xl font-bold mb-2 text-emerald-400">{t('termsTitle')}</h2><p className="text-sm text-zinc-400 mb-4">{t('termsSub')}</p>
-    <div className="p-4 rounded-lg bg-zinc-800/50 border border-zinc-700/50 mb-6 text-sm leading-relaxed text-zinc-200">{t('termsText')}</div>
-    {termsError&&<div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs mb-4">{t(termsError)}</div>}
-    <button onClick={handleAcceptTerms} className="w-full h-11 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium">{t('agreeBtn')}</button>
-  </div></div>
-
-  const roleKey=getRoleKey(user.role)
-  const elevated=['admin','super_admin'].includes(String(user.role||'').toLowerCase())
-  const navItems=['dashboard','newSale','reports','profile',...(elevated?['approvals','settings','users']:[])]
-
-  return <div className="min-h-screen bg-zinc-100 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 transition-colors">
-    <header className="border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-6 py-4 flex items-center justify-between sticky top-0 z-40">
-      <div className="flex items-center gap-3"><h1 className="text-lg font-bold text-emerald-600 dark:text-emerald-400">{t('brand')}</h1><span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-400">{t(roleKey)}</span></div>
-      <div className="flex items-center gap-2"><button onClick={()=>setLang(lang==='am'?'en':'am')} className="px-3 py-1.5 rounded-lg text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800">{lang.toUpperCase()}</button><button onClick={()=>setTheme(theme==='dark'?'light':'dark')} className="px-3 py-1.5 rounded-lg text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800">{theme==='dark'?'🌞':'🌙'}</button><button onClick={handleLogout} className="px-3 py-1.5 rounded-lg border border-zinc-300 dark:border-zinc-700 text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800">{t('signOut')}</button></div>
-    </header>
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
-      <div className="flex gap-2 border-b border-zinc-200 dark:border-zinc-800 pb-2 overflow-x-auto">{navItems.map(p=><button key={p} onClick={()=>setPage(p)} className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap ${page===p?'bg-emerald-600 text-white':'hover:bg-zinc-100 dark:hover:bg-zinc-800'}`}>{t('nav'+p.charAt(0).toUpperCase()+p.slice(1))}</button>)}</div>
-      {page==='dashboard'&&<div className="space-y-6"><h2 className="text-2xl font-bold">{t('welcome')}, {user.name}! 👋</h2><div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5"><p className="text-xs text-zinc-500 mb-1">{t('statThisMonth')}</p><p className="text-2xl font-bold">0 ብር</p></div>
-        <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5"><p className="text-xs text-zinc-500 mb-1">{t('statRecords')}</p><p className="text-2xl font-bold">0</p></div>
-        <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5"><p className="text-xs text-zinc-500 mb-1">{t('statStaff')}</p><p className="text-2xl font-bold">-</p></div>
-        {elevated&&<div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5"><p className="text-xs text-zinc-500 mb-1">{t('pendingCount')}</p><p className="text-2xl font-bold">0</p></div>}
-      </div></div>}
-      {page!=='dashboard'&&<div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-8 text-center"><div className="text-4xl mb-3">🚧</div><h2 className="text-lg font-bold mb-2">{t('nav'+page.charAt(0).toUpperCase()+page.slice(1))}</h2><p className="text-zinc-500">{t('comingSoon')}</p></div>}
-    </div>
-    <footer className="mt-12 py-6 border-t border-zinc-200 dark:border-zinc-800 text-center"><p className="text-xs text-zinc-400 dark:text-zinc-500">{t('brand')} © {new Date().getFullYear()} · {t('developedBy')}{' '}<a href="https://github.com/manchilotabd" target="_blank" rel="noreferrer" className="text-emerald-600 dark:text-emerald-400 hover:underline font-medium">{t('developerName')}</a></p></footer>
-  </div>
+  if(fatal==='config') return <div className="flex min-h-screen items-center justify-center bg-slate-950 p-6 text-center text-white">{labels[lang].config}</div>
+  if(loading) return <div className="flex min-h-screen items-center justify-center bg-slate-950 text-emerald-400">{labels[lang].loading}</div>
+  if(!user) return <Login lang={lang} setLang={setLang} onLogin={setUser}/>
+  return <Shell user={user} lang={lang} setLang={setLang} onLogout={logout}/>
 }
