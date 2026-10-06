@@ -109,7 +109,7 @@ export function UserManagement({ user, lang }) {
   async function load() {
     const q=supabase.from('profiles').select('id,full_name,phone,role,active,branch_id,organization_id,created_at').order('created_at',{ascending:false})
     if(user.role==='branch_admin') q.eq('branch_id',user.branch_id).eq('organization_id',user.organization_id)
-    const [{data:u,error:ue},{data:b,error:be}]=await Promise.all([q,user.role==='super_admin'?supabase.from('branches').select('id,name,organization_id').eq('organization_id',user.organization_id||''):Promise.resolve({data:[]})])
+    const [{data:u,error:ue},{data:b,error:be}]=await Promise.all([q,user.role==='super_admin'?supabase.from('branches').select('id,name,organization_id').order('name'):Promise.resolve({data:[]})])
     if(ue||be) throw ue||be; setUsers(u||[]); setBranches(b||[])
   }
   useEffect(()=>{load().catch(e=>setError(e.message))},[])
