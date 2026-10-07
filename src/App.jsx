@@ -6,12 +6,13 @@ import {SalesReviewPage} from './SalesReview'
 import {TeamManagement} from './TeamManagement'
 import {WorkforceManagement} from './WorkforceManagement'
 import {ReportsPage} from './Reports'
+import {EarningsPage} from './Earnings'
 
 const roles={
  super_admin:'ዋና አስተዳዳሪ',admin:'ዋና አስተዳዳሪ',branch_admin:'የቅርንጫፍ አስተዳዳሪ',
  lead:'መሪ ሻጭ',lead_sales:'መሪ ሻጭ',assistant:'ረዳት',driver:'ሾፌር'
 }
-const nav={dashboard:'ዳሽቦርድ',branches:'ድርጅቶች እና ቅርንጫፎች',users:'ተጠቃሚዎች',teams:'ቡድን እና Split',workforce:'ሰራተኛ እና Attendance',sales:'ሽያጭ',commissions:'ኮሚሽን',reports:'ሪፖርቶች',profile:'መገለጫ'}
+const nav={dashboard:'ዳሽቦርድ',earnings:'ገቢ እና ክፍያ',branches:'ድርጅቶች እና ቅርንጫፎች',users:'ተጠቃሚዎች',teams:'ቡድን እና Split',workforce:'ሰራተኛ እና Attendance',sales:'ሽያጭ',commissions:'ኮሚሽን',reports:'ሪፖርቶች',profile:'መገለጫ'}
 const normalizePhone=v=>{let d=String(v||'').replace(/\D/g,'');if(d.startsWith('251'))return '+'+d;if(d.startsWith('0'))return '+251'+d.slice(1);return d? '+'+d:''}
 
 async function loadProfile(id){
@@ -60,7 +61,7 @@ export default function App(){
   <p className="mt-5 text-center text-xs text-zinc-500">Dirsha-ድርሻ</p>
  </form></div>
 
- const items=global?['dashboard','branches','users','teams','sales','commissions','reports','profile']:branchAdmin?['dashboard','users','teams','sales','commissions','reports','profile']:['dashboard','sales','commissions','reports','profile']
+ const items=global?['dashboard','branches','users','teams','sales','commissions','earnings','reports','profile']:branchAdmin?['dashboard','users','teams','sales','commissions','earnings','reports','profile']:['dashboard','sales','commissions','earnings','reports','profile']
  return <div className="min-h-screen bg-zinc-100 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100">
   <header className="sticky top-0 z-30 border-b bg-white/95 px-4 py-4 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/95"><div className="mx-auto flex max-w-7xl items-center justify-between gap-3"><div><div className="font-black text-emerald-600 dark:text-emerald-400">Dirsha-ድርሻ</div><div className="text-xs text-zinc-500">{roles[role]||role}</div></div><button onClick={logout} className="btn-secondary">ውጣ</button></div></header>
   <main className="mx-auto max-w-7xl p-4 md:p-6">
@@ -68,7 +69,7 @@ export default function App(){
    {page==='dashboard'&&<Dashboard user={user} global={global} branchAdmin={branchAdmin}/>}
    {page==='branches'&&global&&<OrganizationManagement/>}
    {page==='users'&&(global||branchAdmin)&&<UserManagement currentUser={user}/>} {page==='teams'&&(global||branchAdmin)&&<TeamManagement currentUser={user}/>}
-   {page==='sales'&&<SalesPage user={user}/>} {page==='commissions'&&(global||branchAdmin)&&<SalesReviewPage user={user}/>} {page==='reports'&&<ReportsPage user={user}/>} {page==='profile'&&<Placeholder title={nav[page]}/>}  
+   {page==='sales'&&<SalesPage user={user}/>} {page==='commissions'&&(global||branchAdmin)&&<SalesReviewPage user={user}/>} {page==='reports'&&<ReportsPage user={user}/>} {page==='earnings'&&(global||branchAdmin||role==='lead'||role==='lead_sales'||role==='assistant'||role==='driver')&&<EarningsPage user={user}/>}  {page==='profile'&&<Placeholder title={nav[page]}/>}  
   </main>
  </div>
 }
