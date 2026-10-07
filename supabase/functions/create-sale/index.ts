@@ -64,8 +64,13 @@ Deno.serve(async req=>{
   if(!products||products.length!==ids.length)return out({error:'One or more products were not found'},400)
   for(const p of products){
    if(p.active===false)return out({error:'One or more products are inactive'},409)
-   if(p.organization_id&&p.organization_id!==org)return out({error:'Product belongs to another organization'},403)
+   if(p.organization_id!==org)return out({error:'Product belongs to another organization'},403)
   }
+  const {data:assignedProducts,error:assignmentError}=await admin.from('product_branch_assignments')
+   .select('product_id,branch_id').eq('organization_id',org).eq('active',true).in('product_id',ids)
+  if(assignmentError)throw assignmentError
+  const assignedSet=new Set((assignedProducts||[]).filter((a:any)=>branch ? a.branch_id===branch : a.branch_id===null).map((a:any)=>Number(a.product_id)))
+  if(ids.some(id=>!assignedSet.has(Number(id))))return out({error:'One or more products are not assigned to this branch'},403)
 
   const variants=requestedItems.filter(x=>x.product_variant_id).map(x=>x.product_variant_id)
   let variantRows:any[]=[]
@@ -186,7 +191,7 @@ Deno.serve(async req=>{
    const {data,error}=await admin.from('team_split_versions')
     .select('id,status,version,team_structure_id').eq('id',body.team_split_version_id).single()
    if(error)throw error
-   if(splitVersion?.status!=='approved')return out({error:'Team split is not approved'},409)
+   if(data?.status!=='approved')return out({error:'Team split is not approved'},409)
    splitVersion=data
   }
   let splitLines:any[]=[]
@@ -239,7 +244,7 @@ Deno.serve(async req=>{
    submitted_by:caller.id,entered_by:caller.id,team_id:body.team_id||null,lead_employee_id:body.lead_id||null,
    sales_source_policy_version_id:body.sales_source_policy_version_id||null,
    team_structure_version_id:body.team_structure_version_id||null,team_split_version_id:splitVersion?.id||null,
-   total,total_quantity:totalQuantity,total_sales_value:totalSalesValue,gross_commission:grossCommission,
+   total:totalSalesValue,total_quantity:totalQuantity,total_sales_value:totalSalesValue,gross_commission:grossCommission,
    lead_amt:leadAmt,assistant_amt:assistantAmt,driver_amt:driverAmt,status:'pending',
    organization_id:org,branch_id:branch
   }
