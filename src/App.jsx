@@ -30,41 +30,20 @@ function errorText(e){
 }
 
 function ProductsPage({user}){
- const [rows,setRows]=useState([]),[error,setError]=useState(''),[form,setForm]=useState({am:'',en:'',rate:''}),[saving,setSaving]=useState(false)
- const load=async()=>{
-  setError('')
-  let q=supabase.from('products').select('id,en,am,rate,organization_id').order('id')
-  if(user?.organization_id)q=q.or('organization_id.eq.'+user.organization_id+',organization_id.is.null')
-  const {data,error}=await q
-  if(error)setError(error.message||'ምርቶችን ማምጣት አልተቻለም።');else setRows(data||[])
- }
- useEffect(()=>{load()},[user?.organization_id])
- const add=async e=>{
-  e.preventDefault();setError('')
-  if(!form.am.trim()&&!form.en.trim()){setError('የምርት ስም ያስገቡ።');return}
-  const rate=Number(form.rate)
-  if(!Number.isFinite(rate)||rate<0){setError('ትክክለኛ ዋጋ ያስገቡ።');return}
-  setSaving(true)
-  const {error}=await supabase.from('products').insert({am:form.am.trim()||null,en:form.en.trim()||null,rate,organization_id:user?.organization_id||null})
-  setSaving(false)
-  if(error)setError(error.message||'ምርቱን ማስገባት አልተቻለም።')
-  else{setForm({am:'',en:'',rate:''});load()}
- }
- return <section className="space-y-5">
-  <div><h2 className="text-2xl font-black">ምርቶች</h2><p className="text-sm text-zinc-500">የድርጅቱን ምርቶች እና ዋጋዎች ያስተዳድሩ።</p></div>
-  {error&&<div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-600 dark:text-rose-300">{error}</div>}
-  <form onSubmit={add} className="grid gap-3 rounded-2xl border bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900 md:grid-cols-4">
-   <input className="input" required placeholder="የምርት ስም (አማርኛ)" value={form.am} onChange={e=>setForm({...form,am:e.target.value})}/>
-   <input className="input" placeholder="Product name (English)" value={form.en} onChange={e=>setForm({...form,en:e.target.value})}/>
-   <input className="input" type="number" min="0" step="0.01" required placeholder="ዋጋ" value={form.rate} onChange={e=>setForm({...form,rate:e.target.value})}/>
-   <button className="btn" disabled={saving} type="submit">{saving?'በመጨመር ላይ...':'ምርት ጨምር'}</button>
-  </form>
-  <div className="overflow-x-auto rounded-2xl border bg-white dark:border-zinc-800 dark:bg-zinc-900">
-   <table className="w-full text-sm"><thead><tr className="border-b dark:border-zinc-800"><th className="p-3 text-left">ምርት</th><th className="p-3 text-left">English</th><th className="p-3 text-right">ዋጋ</th></tr></thead>
-   <tbody>{rows.map(r=><tr key={r.id} className="border-b last:border-0 dark:border-zinc-800"><td className="p-3">{r.am||r.en||'—'}</td><td className="p-3">{r.en||'—'}</td><td className="p-3 text-right">{Number(r.rate||0).toLocaleString()} ብር</td></tr>)}
-   {!rows.length&&<tr><td colSpan="3" className="p-8 text-center text-zinc-500">ምርት የለም።</td></tr>}</tbody></table>
-  </div>
- </section>
+ const global=['super_admin','admin'].includes(user?.role)
+ const [orgs,setOrgs]=useState([]),[selectedOrg,setSelectedOrg]=useState(user?.organization_id||''),[rows,setRows]=useState([])
+ const [error,setError]=useState(''),[form,setForm]=useState({code:'',am:'',en:'',rate:''}),[saving,setSaving]=useState(false)
+ const targetOrg=user?.role==='branch_admin'?user?.organization_id:selectedOrg
+ const loadOrgs=async()=>{if(!global)return;const {data,error}=await supabase.from('organizations').select('id,name,code,active').eq('active',true).order('name');if(error)setError(error.message);else setOrgs(data||[])}
+ const load=async()=>{setError('');if(!targetOrg){setRows([]);return}const {data,error}=await supabase.from('products').select('id,code,en,am,rate,active,organization_id').eq('organization_id',targetOrg).order('id');if(error)setError(error.message||'ምርቶችን ማምጣት አልተቻለም።');else setRows(data||[])}
+ useEffect(()=>{loadOrgs()},[]);useEffect(()=>{load()},[targetOrg])
+ const add=async e=>{e.preventDefault();setError('');if(!targetOrg){setError('መጀመሪያ ድርጅት ይምረጡ።');return}if(!form.am.trim()&&!form.en.trim()){setError('የምርት ስም ያስገቡ።');return}const rate=Number(form.rate);if(!Number.isFinite(rate)||rate<0){setError('ትክክለኛ ዋጋ ያስገቡ።');return}setSaving(true);const {error}=await supabase.from('products').insert({code:form.code.trim()||null,am:form.am.trim()||null,en:form.en.trim()||null,rate,organization_id:targetOrg,active:true});setSaving(false);if(error)setError(error.message||'ምርቱን ማስገባት አልተቻለም።');else{setForm({code:'',am:'',en:'',rate:''});load()}}
+ const toggle=async r=>{setError('');const {error}=await supabase.from('products').update({active:!r.active,updated_at:new Date().toISOString()}).eq('id',r.id).eq('organization_id',targetOrg);if(error)setError(error.message);else load()}
+ return <section className="space-y-5"><div><h2 className="text-2xl font-black">ምርቶች</h2><p className="text-sm text-zinc-500">ምርቶች በድርጅት ደረጃ ተለይተው ይተዳደራሉ። አንድ ድርጅት ያለው ምርት ለሌላ ድርጅት በራስ-ሰር አይታይም።</p></div>
+ {global&&<div className="rounded-2xl border bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900"><label className="mb-2 block text-sm font-semibold">ድርጅት ምረጥ</label><select className="input" value={selectedOrg} onChange={e=>setSelectedOrg(e.target.value)}><option value="">-- ድርጅት ምረጥ --</option>{orgs.map(o=><option key={o.id} value={o.id}>{o.name}{o.code?' ('+o.code+')':''}</option>)}</select>{!orgs.length&&<p className="mt-2 text-xs text-amber-600">ንቁ ድርጅት አልተገኘም።</p>}</div>}
+ {error&&<div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-600 dark:text-rose-300">{error}</div>}
+ {targetOrg&&<form onSubmit={add} className="grid gap-3 rounded-2xl border bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900 md:grid-cols-5"><input className="input" placeholder="የምርት ኮድ" value={form.code} onChange={e=>setForm({...form,code:e.target.value})}/><input className="input" placeholder="ስም (አማርኛ)" value={form.am} onChange={e=>setForm({...form,am:e.target.value})}/><input className="input" placeholder="Product name" value={form.en} onChange={e=>setForm({...form,en:e.target.value})}/><input className="input" type="number" min="0" step="0.01" required placeholder="መነሻ ዋጋ" value={form.rate} onChange={e=>setForm({...form,rate:e.target.value})}/><button className="btn" disabled={saving} type="submit">{saving?'በመጨመር ላይ...':'ምርት ጨምር'}</button></form>}
+ <div className="overflow-x-auto rounded-2xl border bg-white dark:border-zinc-800 dark:bg-zinc-900"><table className="w-full text-sm"><thead><tr className="border-b dark:border-zinc-800"><th className="p-3 text-left">ኮድ</th><th className="p-3 text-left">ምርት</th><th className="p-3 text-right">ዋጋ</th><th className="p-3 text-center">ሁኔታ</th><th className="p-3 text-center">ተግባር</th></tr></thead><tbody>{rows.map(r=><tr key={r.id} className="border-b last:border-0 dark:border-zinc-800"><td className="p-3">{r.code||'—'}</td><td className="p-3">{r.am||r.en||'—'}{r.en&&r.am?<span className="ml-2 text-xs text-zinc-500">{r.en}</span>:''}</td><td className="p-3 text-right">{Number(r.rate||0).toLocaleString()} ብር</td><td className="p-3 text-center">{r.active?'ንቁ':'የተዘጋ'}</td><td className="p-3 text-center"><button className="btn-secondary" onClick={()=>toggle(r)}>{r.active?'አቦዝን':'አንቃ'}</button></td></tr>)}{!rows.length&&<tr><td colSpan="5" className="p-8 text-center text-zinc-500">{targetOrg?'ለዚህ ድርጅት ምርት የለም።':'ድርጅት ከመረጡ በኋላ የዚያ ድርጅት ምርቶች ይታያሉ።'}</td></tr>}</tbody></table></div></section>
 }
 
 export default function App(){
