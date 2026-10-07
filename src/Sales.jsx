@@ -13,8 +13,8 @@ export function SalesPage({user}){
 
  useEffect(()=>{(async()=>{try{
    const [p,v,s]=await Promise.all([
-    supabase.from('products').select('id,en,am,rate,organization_id,active').or(`organization_id.eq.${user.organization_id},organization_id.is.null`).order('en'),
-    supabase.from('product_variants').select('id,product_id,variant_name,unit,active').eq('organization_id',user.organization_id).eq('active',true).order('variant_name'),
+    supabase.from('products').select('id,en,am,rate,organization_id,active').eq('organization_id',user.organization_id).eq('active',true).order('en'),
+    supabase.from('product_variants').select('id,product_id,name_en,name_am,unit,active,organization_id').eq('organization_id',user.organization_id).eq('active',true).order('name_en'),
     canAssignStaff ? supabase.from('profiles').select('id,full_name,phone,role').eq('active',true).in('role',['lead','lead_sales','assistant','driver']).eq('organization_id',user.organization_id).eq('branch_id',user.branch_id).order('full_name') : Promise.resolve({data:[],error:null})
    ])
    if(p.error)throw p.error
@@ -26,7 +26,7 @@ export function SalesPage({user}){
  const selected=products.find(p=>String(p.id)===String(productId))
  const selectedVariants=variants.filter(v=>String(v.product_id)===String(productId))
  const selectedVariant=selectedVariants.find(v=>String(v.id)===String(variantId))
- const displayName=selected?((selected.am||selected.en)+(selectedVariant?' — '+selectedVariant.variant_name:'')):''
+ const displayName=selected?((selected.am||selected.en)+(selectedVariant?' — '+(selectedVariant.name_am||selectedVariant.name_en||'') :'')):''
  const total=useMemo(()=>items.reduce((n,x)=>n+x.salesValue,0),[items])
  const totalQuantity=useMemo(()=>items.reduce((n,x)=>n+x.qty,0),[items])
 
@@ -59,7 +59,7 @@ export function SalesPage({user}){
    <div className="grid gap-3 rounded-2xl border bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900 md:grid-cols-2">
     <label className="text-sm">የሽያጭ ቀን<input className="input mt-1" type="date" value={saleDate} onChange={e=>setSaleDate(e.target.value)} required/></label>
     <label className="text-sm">ምርት<select className="input mt-1" value={productId} onChange={e=>{setProductId(e.target.value);setVariantId('')}}><option value="">ምርት ይምረጡ</option>{products.map(p=><option key={p.id} value={p.id}>{p.am||p.en}</option>)}</select></label>
-    {selectedVariants.length>0&&<label className="text-sm">መጠን / ቫሪያንት<select className="input mt-1" value={variantId} onChange={e=>setVariantId(e.target.value)}><option value="">መጠን ይምረጡ</option>{selectedVariants.map(v=><option key={v.id} value={v.id}>{v.variant_name}{v.unit?' · '+v.unit:''}</option>)}</select></label>}
+    {selectedVariants.length>0&&<label className="text-sm">መጠን / ቫሪያንት<select className="input mt-1" value={variantId} onChange={e=>setVariantId(e.target.value)}><option value="">መጠን ይምረጡ</option>{selectedVariants.map(v=><option key={v.id} value={v.id}>{v.name_am||v.name_en}{v.unit?' · '+v.unit:''}</option>)}</select></label>}
     <label className="text-sm">ብዛት<input className="input mt-1" type="number" min="1" step="1" value={qty} onChange={e=>setQty(e.target.value)}/></label>
     <div className="flex items-end"><button type="button" onClick={add} className="btn w-full">ወደ ዝርዝር ጨምር</button></div>
    </div>
@@ -70,7 +70,7 @@ export function SalesPage({user}){
    </div>}
    <div className="overflow-x-auto rounded-2xl border bg-white dark:border-zinc-800 dark:bg-zinc-900">
     <table className="w-full text-sm"><thead><tr className="border-b dark:border-zinc-800"><th className="p-3 text-left">ምርት</th><th className="p-3">ብዛት</th><th className="p-3">የአንድ ዋጋ</th><th className="p-3">የሽያጭ ዋጋ</th><th className="p-3"></th></tr></thead><tbody>
-     {items.map(x=><tr key={x.product_id} className="border-b last:border-0 dark:border-zinc-800"><td className="p-3">{x.name}</td><td className="p-3 text-center">{x.qty}</td><td className="p-3 text-right">{x.rate.toLocaleString()} ብር</td><td className="p-3 text-right">{x.salesValue.toLocaleString()} ብር</td><td className="p-3 text-center"><button type="button" className="text-rose-500" onClick={()=>setItems(a=>a.filter(i=>i.key!==x.key))}>ሰርዝ</button></td></tr>)}
+     {items.map(x=><tr key={x.key} className="border-b last:border-0 dark:border-zinc-800"><td className="p-3">{x.name}</td><td className="p-3 text-center">{x.qty}</td><td className="p-3 text-right">{x.rate.toLocaleString()} ብር</td><td className="p-3 text-right">{x.salesValue.toLocaleString()} ብር</td><td className="p-3 text-center"><button type="button" className="text-rose-500" onClick={()=>setItems(a=>a.filter(i=>i.key!==x.key))}>ሰርዝ</button></td></tr>)}
      {!items.length&&<tr><td colSpan="5" className="p-8 text-center text-zinc-500">የሽያጭ ዝርዝር እዚህ ይታያል።</td></tr>}
     </tbody>{items.length&&<tfoot><tr><td className="p-3 font-bold">ጠቅላላ</td><td className="p-3 text-center font-bold">{totalQuantity}</td><td/><td className="p-3 text-right font-black">{total.toLocaleString()} ብር</td><td/></tr></tfoot>}</table>
    </div>
