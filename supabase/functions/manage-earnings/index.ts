@@ -41,6 +41,25 @@ Deno.serve(async req=>{
    if(action==='place_hold'){const amount=body.full_hold?Number(e.gross_commission||0)+Number(e.daily_adjustments||0)+Number(e.bonuses||0):Number(body.amount||0);const {data:h,error:he}=await supabase.from('earnings_holds').insert({employee_period_earnings_id:eId,hold_type:body.hold_type||'operational_review',amount_held:amount,reason:body.reason,placed_by:actor.id}).select().single();if(he)throw he;await supabase.from('employee_period_earnings').update({amount_held:amount,status:'held',net_payable:Math.max(0,Number(e.net_payable||0)-amount)}).eq('id',eId);return json({ok:true,hold:h})}
    const {data:h,error:he}=await supabase.from('earnings_holds').select('*').eq('employee_period_earnings_id',eId).eq('status','active');if(he)throw he;const released=(h||[]).reduce((a,x)=>a+Number(x.amount_held||0),0);await supabase.from('earnings_holds').update({status:'released',released_by:actor.id,released_at:new Date().toISOString()}).eq('employee_period_earnings_id',eId).eq('status','active');const base=Number(e.gross_commission||0)+Number(e.daily_adjustments||0)+Number(e.bonuses||0)-Number(e.support_allocations||0)-Number(e.deductions||0)-Number(e.penalties||0)-Number(e.tax||0)-Number(e.legal_deductions||0);await supabase.from('employee_period_earnings').update({amount_held:0,status:'calculated',net_payable:Math.max(0,base)}).eq('id',eId);return json({ok:true,released})
   }
+  if(action==='submit_dispute'){
+   const eId=body.employee_period_earnings_id;if(!eId||!body.reason)return json({error:'Earnings ID and reason are required'},400);
+   const {data:e}=await supabase.from('employee_period_earnings').select('*,commission_periods:commission_period_id(organization_id)').eq('id',eId).single();
+   if(!e||e.commission_periods.organization_id!==actor.organization_id)return json({error:'Not found'},404);
+   const {data:d,error:de}=await supabase.from('disputes').insert({organization_id:actor.organization_id,employee_id:e.employee_id,employee_period_earnings_id:eId,reason:body.reason,status:'open',submitted_by:actor.id}).select().single();if(de)throw de;
+   await supabase.from('audit_logs').insert({organization_id:actor.organization_id,branch_id:actor.branch_id||null,actor_id:actor.id,action:'submit_dispute',entity_type:'dispute',entity_id:d.id,after_data:d,reason:body.reason});
+   return json({ok:true,dispute:d});
+  }
+  if(action==='resolve_dispute'){
+   if(!global)return json({error:'Super Admin approval required'},403);
+   const id=body.dispute_id;if(!id||!body.resolution_note)return json({error:'Dispute ID and resolution note are required'},400);
+   const {data:d}=await supabase.from('disputes').select('*').eq('id',id).eq('organization_id',actor.organization_id).single();if(!d)return json({error:'Dispute not found'},404);
+   const next=body.resolution==='accepted'?'resolved':'rejected';
+   const {data:u,error:ue}=await supabase.from('disputes').update({status:next,resolved_by:actor.id,resolved_at:new Date().toISOString(),resolution_note:body.resolution_note}).eq('id',id).select().single();if(ue)throw ue;
+   if(next==='resolved'&&Number(body.correction_amount||0)!==0){const {data:corr,error:ce}=await supabase.from('corrections').insert({organization_id:actor.organization_id,dispute_id:id,employee_period_earnings_id:d.employee_period_earnings_id,amount:Number(body.correction_amount),reason:body.resolution_note,created_by:actor.id}).select().single();if(ce)throw ce;
+    const {data:e}=await supabase.from('employee_period_earnings').select('*').eq('id',d.employee_period_earnings_id).single();if(e){const nextAdj=Number(e.daily_adjustments||0)+Number(body.correction_amount);const net=Math.max(0,Number(e.gross_commission||0)+nextAdj+Number(e.bonuses||0)-Number(e.support_allocations||0)-Number(e.deductions||0)-Number(e.penalties||0)-Number(e.tax||0)-Number(e.legal_deductions||0)-Number(e.amount_held||0));await supabase.from('employee_period_earnings').update({daily_adjustments:nextAdj,net_payable:net}).eq('id',e.id)}}
+   await supabase.from('audit_logs').insert({organization_id:actor.organization_id,branch_id:actor.branch_id||null,actor_id:actor.id,action:'resolve_dispute',entity_type:'dispute',entity_id:id,before_data:d,after_data:u,reason:body.resolution_note});
+   return json({ok:true,dispute:u});
+  }
   if(action==='approve_period'){if(!global)return json({error:'Super Admin approval required'},403);const id=body.commission_period_id;await supabase.from('commission_periods').update({status:'approved'}).eq('id',id).eq('organization_id',actor.organization_id);await supabase.from('employee_period_earnings').update({status:'approved',approved_at:new Date().toISOString()}).eq('commission_period_id',id);return json({ok:true})}
   return json({error:'Unknown action'},400)
  }catch(e){return json({error:e.message||String(e)},500)}
