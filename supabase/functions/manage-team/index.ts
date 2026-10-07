@@ -43,7 +43,7 @@ Deno.serve(async req=>{
    const {data:team,error:te}=await db.from('teams').select('id,organization_id,branch_id').eq('id',body.team_id).single();if(te||!team)return out({error:'Team not found'},404)
    if(team.organization_id!==me.organization_id||team.branch_id!==me.branch_id)return out({error:'Team is outside your branch'},403)
    const p=body.percentages||{},sum=Number(p.lead||0)+Number(p.assistant||0)+Number(p.driver||0);if(sum!==100)return out({error:'Split must total 100%'},400)
-   const {data:latest}=await db.from('team_split_versions').select('version').eq('team_structure_id',team.id).order('version',{ascending:false}).limit(1).maybeSingle()
+   const {data:latest}=await db.from('team_structures').select('version').eq('team_id',team.id).order('version',{ascending:false}).limit(1).maybeSingle()
    const version=Number(latest?.version||0)+1
    const {data:structure,error:se}=await db.from('team_structures').insert({team_id:team.id,version,status:'active',effective_from:String(body.effective_from||today()),created_by:me.id}).select('id').single();if(se)throw se
    const {data:sv,error:sve}=await db.from('team_split_versions').insert({team_structure_id:structure.id,version,status:'pending',effective_from:String(body.effective_from||today()),submitted_by:me.id,submitted_at:new Date().toISOString()}).select('id').single();if(sve)throw sve
