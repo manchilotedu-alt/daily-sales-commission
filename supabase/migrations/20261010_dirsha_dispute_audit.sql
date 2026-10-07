@@ -38,3 +38,9 @@ create table if not exists public.audit_logs (
 create index if not exists disputes_org_idx on public.disputes(organization_id,status);
 create index if not exists corrections_org_idx on public.corrections(organization_id,created_at);
 create index if not exists audit_logs_org_idx on public.audit_logs(organization_id,created_at desc);
+
+-- Payment and dispute/audit read access for branch-scoped finance screens
+drop policy if exists payment_transactions_select on public.payment_transactions;
+create policy payment_transactions_select on public.payment_transactions for select using (
+ public.is_super_admin() or exists(select 1 from public.payments p where p.id=payment_transactions.payment_id and (p.employee_id=auth.uid() or exists(select 1 from public.profiles me join public.profiles ep on ep.id=p.employee_id where me.id=auth.uid() and me.role='branch_admin' and me.branch_id=ep.branch_id)))
+);
