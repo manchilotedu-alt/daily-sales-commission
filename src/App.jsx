@@ -10,7 +10,7 @@ const roles={
  super_admin:'ዋና አስተዳዳሪ',admin:'ዋና አስተዳዳሪ',branch_admin:'የቅርንጫፍ አስተዳዳሪ',
  lead:'መሪ ሻጭ',lead_sales:'መሪ ሻጭ',assistant:'ረዳት',driver:'ሾፌር'
 }
-const nav={dashboard:'ዳሽቦርድ',branches:'ድርጅቶች እና ቅርንጫፎች',users:'ተጠቃሚዎች',teams:'ቡድን እና Split',sales:'ሽያጭ',commissions:'ኮሚሽን',reports:'ሪፖርቶች',profile:'መገለጫ'}
+const nav={dashboard:'ዳሽቦርድ',branches:'ድርጅቶች እና ቅርንጫፎች',users:'ተጠቃሚዎች',teams:'ቡድን እና Split',workforce:'ሰራተኛ እና Attendance',sales:'ሽያጭ',commissions:'ኮሚሽን',reports:'ሪፖርቶች',profile:'መገለጫ'}
 const normalizePhone=v=>{let d=String(v||'').replace(/\D/g,'');if(d.startsWith('251'))return '+'+d;if(d.startsWith('0'))return '+251'+d.slice(1);return d? '+'+d:''}
 
 async function loadProfile(id){
