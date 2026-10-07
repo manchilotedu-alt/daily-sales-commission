@@ -96,14 +96,14 @@ export default function App(){
   <header className="sticky top-0 z-30 border-b bg-white/95 px-4 py-4 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/95"><div className="mx-auto flex max-w-7xl items-center justify-between gap-3"><div><div className="font-black text-emerald-600 dark:text-emerald-400">Dirsha-ድርሻ</div><div className="text-xs text-zinc-500">{roles[role]||role}</div></div><button onClick={logout} className="btn-secondary">ውጣ</button></div></header>
   <main className="mx-auto max-w-7xl p-4 md:p-6">
    <nav className="mb-6 flex gap-2 overflow-x-auto pb-1">{items.map(x=><button key={x} onClick={()=>setPage(x)} className={`whitespace-nowrap rounded-lg px-4 py-2 text-sm font-semibold ${page===x?'bg-emerald-600 text-white':'bg-white dark:bg-zinc-900'}`}>{nav[x]}</button>)}</nav>
-   {page==='dashboard'&&<Dashboard user={user} global={global} branchAdmin={branchAdmin}/>}{page==='products'&&(global||branchAdmin)&&<ProductsPage user={user}/>}
+   {page==='dashboard'&&<Dashboard user={user} global={global} branchAdmin={branchAdmin} setPage={setPage}/>}{page==='products'&&(global||branchAdmin)&&<ProductsPage user={user}/>}
    {page==='branches'&&global&&<OrganizationManagement/>}
    {page==='users'&&(global||branchAdmin)&&<UserManagement currentUser={user}/>} {page==='teams'&&(global||branchAdmin)&&<TeamManagement currentUser={user}/>}
    {page==='sales'&&<SalesPage user={user}/>} {page==='commissions'&&(global||branchAdmin)&&<SalesReviewPage user={user}/>} {page==='reports'&&<ReportsPage user={user}/>} {page==='earnings'&&(global||branchAdmin||role==='lead'||role==='lead_sales'||role==='assistant'||role==='driver')&&<EarningsPage user={user}/>}  {page==='profile'&&<Placeholder title={nav[page]}/>}  
   </main>
  </div>
 }
-function Dashboard({user,global,branchAdmin}){ 
+function Dashboard({user,global,branchAdmin,setPage}){ 
  const [stats,setStats]=useState({employees:0,teams:0,products:0,sales:0,commission:0})
  const [loading,setLoading]=useState(true)
  const [error,setError]=useState('')
@@ -164,7 +164,7 @@ function Dashboard({user,global,branchAdmin}){
    <div className="rounded-3xl border bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
     <h3 className="text-lg font-black">ፈጣን መዳረሻ</h3><p className="mt-1 text-xs text-zinc-500">በብዛት የሚጠቀሙትን ክፍል በቀጥታ ይክፈቱ።</p>
     <div className="mt-5 space-y-3">
-      {([['products','📦','ምርቶች'],['sales','🛒','ሽያጭ'],['teams','👥','ቡድኖች'],['earnings','💰','ገቢ እና ክፍያ']]).filter(([p])=>global||branchAdmin||p==='sales'||p==='earnings').map(([p,i,l])=><button key={p} onClick={()=>window.dispatchEvent(new CustomEvent('dirsha:navigate',{detail:p}))} className="flex w-full items-center justify-between rounded-2xl border p-4 text-left transition hover:border-emerald-400 hover:bg-emerald-50 dark:border-zinc-800 dark:hover:bg-emerald-950/30"><span className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-zinc-100 dark:bg-zinc-800">{i}</span><span className="font-bold">{l}</span></span><span className="text-zinc-400">→</span></button>)}
+      {([['products','📦','ምርቶች'],['sales','🛒','ሽያጭ'],['teams','👥','ቡድኖች'],['earnings','💰','ገቢ እና ክፍያ']]).filter(([p])=>global||branchAdmin||p==='sales'||p==='earnings').map(([p,i,l])=><button key={p} onClick={()=>setPage(p)} className="flex w-full items-center justify-between rounded-2xl border p-4 text-left transition hover:border-emerald-400 hover:bg-emerald-50 dark:border-zinc-800 dark:hover:bg-emerald-950/30"><span className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-zinc-100 dark:bg-zinc-800">{i}</span><span className="font-bold">{l}</span></span><span className="text-zinc-400">→</span></button>)}
     </div>
    </div>
   </div>
