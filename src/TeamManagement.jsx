@@ -19,10 +19,13 @@ export function TeamManagement({currentUser}){
    let tq=supabase.from('teams').select('id,name,status,vehicle_id,branch_id,organization_id,created_at').order('created_at',{ascending:false})
    let uq=supabase.from('profiles').select('id,full_name,role,active,organization_id,branch_id').eq('active',true).order('full_name')
    let sq=supabase.from('team_split_versions').select('id,version,status,effective_from,effective_to,submitted_by,submitted_at,approved_by,approved_at,returned_reason,team_structure_id').order('created_at',{ascending:false})
-   if(!global){tq=tq.eq('organization_id',currentUser.organization_id).eq('branch_id',currentUser.branch_id);uq=uq.eq('organization_id',currentUser.organization_id).eq('branch_id',currentUser.branch_id);sq=sq.eq('team_structure_id','00000000-0000-0000-0000-000000000000')}
+   if(!global){tq=tq.eq('organization_id',currentUser.organization_id).eq('branch_id',currentUser.branch_id);uq=uq.eq('organization_id',currentUser.organization_id).eq('branch_id',currentUser.branch_id)}
    const [t,u,s]=await Promise.all([tq,uq,sq])
    if(t.error||u.error||s.error)throw t.error||u.error||s.error
-   setTeams(t.data||[]);setUsers(u.data||[]);setSplits(s.data||[])
+   const teamRows=t.data||[], teamIds=new Set(teamRows.map(x=>x.id))
+   let splitRows=s.data||[]
+   if(!global&&splitRows.length){const {data:structures}=await supabase.from('team_structures').select('id').in('team_id',[...teamIds]);const ids=(structures||[]).map(x=>x.id);splitRows=splitRows.filter(x=>ids.includes(x.team_structure_id))}
+   setTeams(teamRows);setUsers(u.data||[]);setSplits(splitRows)
   }catch(e){setError(e.message)}
  }
  useEffect(()=>{load()},[])
