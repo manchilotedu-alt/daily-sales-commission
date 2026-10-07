@@ -4,6 +4,7 @@ import {OrganizationManagement,UserManagement} from './Management'
 import {SalesPage} from './Sales'
 import {SalesReviewPage} from './SalesReview'
 import {TeamManagement} from './TeamManagement'
+import {WorkforceManagement} from './WorkforceManagement'
 
 const roles={
  super_admin:'ዋና አስተዳዳሪ',admin:'ዋና አስተዳዳሪ',branch_admin:'የቅርንጫፍ አስተዳዳሪ',
