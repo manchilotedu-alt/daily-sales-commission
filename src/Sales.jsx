@@ -12,15 +12,18 @@ export function SalesPage({user}){
  const canAssignStaff=['super_admin','admin','branch_admin'].includes(user.role)
 
  useEffect(()=>{(async()=>{try{
-   const [p,v,s]=await Promise.all([
+   const [p,v,s,a]=await Promise.all([
     supabase.from('products').select('id,en,am,rate,organization_id,active').eq('organization_id',user.organization_id).eq('active',true).order('en'),
     supabase.from('product_variants').select('id,product_id,name_en,name_am,unit,active,organization_id').eq('organization_id',user.organization_id).eq('active',true).order('name_en'),
-    canAssignStaff ? supabase.from('profiles').select('id,full_name,phone,role').eq('active',true).in('role',['lead','lead_sales','assistant','driver']).eq('organization_id',user.organization_id).eq('branch_id',user.branch_id).order('full_name') : Promise.resolve({data:[],error:null})
+    canAssignStaff ? supabase.from('profiles').select('id,full_name,phone,role').eq('active',true).in('role',['lead','lead_sales','assistant','driver']).eq('organization_id',user.organization_id).eq('branch_id',user.branch_id).order('full_name') : Promise.resolve({data:[],error:null}),
+    user.branch_id ? supabase.from('product_branch_assignments').select('product_id').eq('organization_id',user.organization_id).eq('branch_id',user.branch_id).eq('active',true) : supabase.from('product_branch_assignments').select('product_id').eq('organization_id',user.organization_id).is('branch_id',null).eq('active',true)
    ])
    if(p.error)throw p.error
    if(v.error)throw v.error
    if(s.error)throw s.error
-   setProducts(p.data||[]);setVariants(v.data||[]);setStaff(s.data||[])
+   if(a.error)throw a.error
+   const allowed=new Set((a.data||[]).map(x=>Number(x.product_id)))
+   setProducts((p.data||[]).filter(x=>allowed.has(Number(x.id))));setVariants(v.data||[]);setStaff(s.data||[])
   }catch(e){setError(e.message)}})()},[user.organization_id,user.branch_id,canAssignStaff])
 
  const selected=products.find(p=>String(p.id)===String(productId))
