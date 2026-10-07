@@ -29,6 +29,44 @@ function errorText(e){
  return m||'ስህተት ተከስቷል።'
 }
 
+function ProductsPage({user}){
+ const [rows,setRows]=useState([]),[error,setError]=useState(''),[form,setForm]=useState({am:'',en:'',rate:''}),[saving,setSaving]=useState(false)
+ const load=async()=>{
+  setError('')
+  let q=supabase.from('products').select('id,en,am,rate,organization_id').order('id')
+  if(user?.organization_id)q=q.or('organization_id.eq.'+user.organization_id+',organization_id.is.null')
+  const {data,error}=await q
+  if(error)setError(error.message||'ምርቶችን ማምጣት አልተቻለም።');else setRows(data||[])
+ }
+ useEffect(()=>{load()},[user?.organization_id])
+ const add=async e=>{
+  e.preventDefault();setError('')
+  if(!form.am.trim()&&!form.en.trim()){setError('የምርት ስም ያስገቡ።');return}
+  const rate=Number(form.rate)
+  if(!Number.isFinite(rate)||rate<0){setError('ትክክለኛ ዋጋ ያስገቡ።');return}
+  setSaving(true)
+  const {error}=await supabase.from('products').insert({am:form.am.trim()||null,en:form.en.trim()||null,rate,organization_id:user?.organization_id||null})
+  setSaving(false)
+  if(error)setError(error.message||'ምርቱን ማስገባት አልተቻለም።')
+  else{setForm({am:'',en:'',rate:''});load()}
+ }
+ return <section className="space-y-5">
+  <div><h2 className="text-2xl font-black">ምርቶች</h2><p className="text-sm text-zinc-500">የድርጅቱን ምርቶች እና ዋጋዎች ያስተዳድሩ።</p></div>
+  {error&&<div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-600 dark:text-rose-300">{error}</div>}
+  <form onSubmit={add} className="grid gap-3 rounded-2xl border bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900 md:grid-cols-4">
+   <input className="input" required placeholder="የምርት ስም (አማርኛ)" value={form.am} onChange={e=>setForm({...form,am:e.target.value})}/>
+   <input className="input" placeholder="Product name (English)" value={form.en} onChange={e=>setForm({...form,en:e.target.value})}/>
+   <input className="input" type="number" min="0" step="0.01" required placeholder="ዋጋ" value={form.rate} onChange={e=>setForm({...form,rate:e.target.value})}/>
+   <button className="btn" disabled={saving} type="submit">{saving?'በመጨመር ላይ...':'ምርት ጨምር'}</button>
+  </form>
+  <div className="overflow-x-auto rounded-2xl border bg-white dark:border-zinc-800 dark:bg-zinc-900">
+   <table className="w-full text-sm"><thead><tr className="border-b dark:border-zinc-800"><th className="p-3 text-left">ምርት</th><th className="p-3 text-left">English</th><th className="p-3 text-right">ዋጋ</th></tr></thead>
+   <tbody>{rows.map(r=><tr key={r.id} className="border-b last:border-0 dark:border-zinc-800"><td className="p-3">{r.am||r.en||'—'}</td><td className="p-3">{r.en||'—'}</td><td className="p-3 text-right">{Number(r.rate||0).toLocaleString()} ብር</td></tr>)}
+   {!rows.length&&<tr><td colSpan="3" className="p-8 text-center text-zinc-500">ምርት የለም።</td></tr>}</tbody></table>
+  </div>
+ </section>
+}
+
 export default function App(){
  const [user,setUser]=useState(null),[loading,setLoading]=useState(true),[page,setPage]=useState('dashboard'),[error,setError]=useState('')
  const role=user?.role||''
@@ -66,7 +104,7 @@ export default function App(){
   <header className="sticky top-0 z-30 border-b bg-white/95 px-4 py-4 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/95"><div className="mx-auto flex max-w-7xl items-center justify-between gap-3"><div><div className="font-black text-emerald-600 dark:text-emerald-400">Dirsha-ድርሻ</div><div className="text-xs text-zinc-500">{roles[role]||role}</div></div><button onClick={logout} className="btn-secondary">ውጣ</button></div></header>
   <main className="mx-auto max-w-7xl p-4 md:p-6">
    <nav className="mb-6 flex gap-2 overflow-x-auto pb-1">{items.map(x=><button key={x} onClick={()=>setPage(x)} className={`whitespace-nowrap rounded-lg px-4 py-2 text-sm font-semibold ${page===x?'bg-emerald-600 text-white':'bg-white dark:bg-zinc-900'}`}>{nav[x]}</button>)}</nav>
-   {page==='dashboard'&&<Dashboard user={user} global={global} branchAdmin={branchAdmin}/>}
+   {page==='dashboard'&&<Dashboard user={user} global={global} branchAdmin={branchAdmin}/>}{page==='products'&&(global||branchAdmin)&&<ProductsPage user={user}/>}
    {page==='branches'&&global&&<OrganizationManagement/>}
    {page==='users'&&(global||branchAdmin)&&<UserManagement currentUser={user}/>} {page==='teams'&&(global||branchAdmin)&&<TeamManagement currentUser={user}/>}
    {page==='sales'&&<SalesPage user={user}/>} {page==='commissions'&&(global||branchAdmin)&&<SalesReviewPage user={user}/>} {page==='reports'&&<ReportsPage user={user}/>} {page==='earnings'&&(global||branchAdmin||role==='lead'||role==='lead_sales'||role==='assistant'||role==='driver')&&<EarningsPage user={user}/>}  {page==='profile'&&<Placeholder title={nav[page]}/>}  
