@@ -566,3 +566,15 @@ drop policy if exists periods_select on public.commission_periods;
 create policy periods_select on public.commission_periods for select using(public.is_super_admin() or organization_id=public.current_organization_id());
 drop policy if exists settings_select on public.organization_settings;
 create policy settings_select on public.organization_settings for select using(public.is_super_admin() or organization_id=public.current_organization_id());
+
+
+-- Dirsha earnings engine integrity constraints and indexes.
+alter table public.employee_period_earnings add constraint employee_period_earnings_amounts_nonnegative check(gross_commission>=0 and daily_adjustments>=0 and bonuses>=0 and support_allocations>=0 and deductions>=0 and penalties>=0 and tax>=0 and legal_deductions>=0 and amount_held>=0 and net_payable>=0);
+alter table public.earnings_adjustments add constraint earnings_adjustments_amount_nonnegative check(amount>=0), add constraint earnings_adjustments_percentage_valid check(percentage is null or (percentage>=0 and percentage<=100));
+alter table public.earnings_holds add constraint earnings_holds_status_valid check(status in ('active','released'));
+alter table public.payments add constraint payments_status_valid check(payment_status in ('unpaid','partially_paid','fully_paid'));
+create index if not exists idx_employee_period_earnings_period on public.employee_period_earnings(commission_period_id);
+create index if not exists idx_employee_period_earnings_employee on public.employee_period_earnings(employee_id);
+create index if not exists idx_earnings_holds_active on public.earnings_holds(employee_period_earnings_id,status);
+create index if not exists idx_payments_period_earnings on public.payments(employee_period_earnings_id);
+create index if not exists idx_payment_transactions_payment on public.payment_transactions(payment_id);
