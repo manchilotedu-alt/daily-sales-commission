@@ -5,6 +5,7 @@ import {SalesPage} from './Sales'
 import {SalesReviewPage} from './SalesReview'
 import {TeamManagement} from './TeamManagement'
 import {WorkforceManagement} from './WorkforceManagement'
+import {ReportsPage} from './Reports'
 
 const roles={
  super_admin:'ዋና አስተዳዳሪ',admin:'ዋና አስተዳዳሪ',branch_admin:'የቅርንጫፍ አስተዳዳሪ',
@@ -67,7 +68,7 @@ export default function App(){
    {page==='dashboard'&&<Dashboard user={user} global={global} branchAdmin={branchAdmin}/>}
    {page==='branches'&&global&&<OrganizationManagement/>}
    {page==='users'&&(global||branchAdmin)&&<UserManagement currentUser={user}/>} {page==='teams'&&(global||branchAdmin)&&<TeamManagement currentUser={user}/>}
-   {page==='sales'&&<SalesPage user={user}/>} {page==='commissions'&&(global||branchAdmin)&&<SalesReviewPage user={user}/>} {['reports','profile'].includes(page)&&<Placeholder title={nav[page]}/>} 
+   {page==='sales'&&<SalesPage user={user}/>} {page==='commissions'&&(global||branchAdmin)&&<SalesReviewPage user={user}/>} {page==='reports'&&<ReportsPage user={user}/>} {page==='profile'&&<Placeholder title={nav[page]}/>}  
   </main>
  </div>
 }
