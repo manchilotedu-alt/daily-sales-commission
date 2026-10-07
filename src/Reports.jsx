@@ -1,0 +1,31 @@
+import React,{useEffect,useMemo,useState} from 'react'
+import {supabase} from './lib/supabase'
+
+const money=n=>Number(n||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})
+const startOf=(mode,d)=>{const x=new Date(d+'T00:00:00');if(mode==='day')return d;if(mode==='week'){const day=x.getDay()||7;x.setDate(x.getDate()-day+1)}else if(mode==='month')x.setDate(1);else x.setMonth(0,1);return x.toISOString().slice(0,10)}
+const endOf=(mode,d)=>{const x=new Date(startOf(mode,d)+'T00:00:00');if(mode==='day')return d;if(mode==='week')x.setDate(x.getDate()+6);else if(mode==='month')x.setMonth(x.getMonth()+1,x.getDate()-1);else x.setMonth(11,31);return x.toISOString().slice(0,10)}
+
+export function ReportsPage({user}){
+ const [mode,setMode]=useState('month'),[date,setDate]=useState(new Date().toISOString().slice(0,10)),[rows,setRows]=useState([]),[products,setProducts]=useState([]),[branches,setBranches]=useState([]),[loading,setLoading]=useState(true),[error,setError]=useState('')
+ const from=startOf(mode,date),to=endOf(mode,date)
+ useEffect(()=>{(async()=>{setLoading(true);setError('');try{
+  let q=supabase.from('performance_sales_daily').select('*').eq('organization_id',user.organization_id).gte('performance_date',from).lte('performance_date',to).order('performance_date')
+  if(user.role==='branch_admin'||user.branch_id)q=q.eq('branch_id',user.branch_id)
+  const [a,p,b]=await Promise.all([q,
+   supabase.from('performance_product_daily').select('*').eq('organization_id',user.organization_id).gte('performance_date',from).lte('performance_date',to),
+   user.role==='super_admin'||user.role==='admin'?supabase.from('branches').select('id,name').eq('organization_id',user.organization_id):Promise.resolve({data:[],error:null})])
+  if(a.error)throw a.error;if(p.error)throw p.error;if(b.error)throw b.error
+  setRows(a.data||[]);setProducts(p.data||[]);setBranches(b.data||[])
+ }catch(e){setError(e.message)}finally{setLoading(false)}})()},[user.organization_id,user.branch_id,user.role,from,to])
+ const totals=useMemo(()=>rows.reduce((a,r)=>({sales:a.sales+Number(r.sale_count||0),qty:a.qty+Number(r.total_quantity||0),value:a.value+Number(r.total_sales_value||0),commission:a.commission+Number(r.total_commission||0)}),{sales:0,qty:0,value:0,commission:0}),[rows])
+ const productTotals=useMemo(()=>{const m={};for(const r of products){const k=String(r.product_id);m[k]??={qty:0,value:0,commission:0};m[k].qty+=Number(r.total_quantity||0);m[k].value+=Number(r.total_sales_value||0);m[k].commission+=Number(r.total_commission||0)}return Object.entries(m).map(([id,v])=>({id,...v})).sort((a,b)=>b.value-a.value)},[products])
+ return <section className="space-y-5">
+  <div><h2 className="text-2xl font-black">የአፈጻጸም ሪፖርት</h2><p className="text-sm text-zinc-500">የተረጋገጡ ሽያጮችን ብቻ በብዛት፣ በገንዘብ ዋጋ እና በኮሚሽን ያሳያል።</p></div>
+  <div className="grid gap-3 rounded-2xl border bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900 md:grid-cols-3"><label>ጊዜ<select className="input mt-1" value={mode} onChange={e=>setMode(e.target.value)}><option value="day">ዕለታዊ</option><option value="week">ሳምንታዊ</option><option value="month">ወርሃዊ</option><option value="year">ዓመታዊ</option></select></label><label>ቀን<input className="input mt-1" type="date" value={date} onChange={e=>setDate(e.target.value)}/></label><div className="flex items-end text-sm text-zinc-500">{from} → {to}</div></div>
+  {error&&<div className="rounded-xl bg-rose-500/10 p-3 text-rose-300">{error}</div>}
+  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><Metric title="የሽያጭ መዝገቦች" value={totals.sales}/><Metric title="ጠቅላላ ብዛት" value={totals.qty}/><Metric title="የሽያጭ ዋጋ" value={money(totals.value)+' ብር'}/><Metric title="ጠቅላላ ኮሚሽን" value={money(totals.commission)+' ብር'}/></div>
+  <div className="rounded-2xl border bg-white dark:border-zinc-800 dark:bg-zinc-900"><div className="border-b p-4 font-bold dark:border-zinc-800">ዕለታዊ አፈጻጸም</div><div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b dark:border-zinc-800"><th className="p-3 text-left">ቀን</th><th className="p-3">ሽያጭ</th><th className="p-3">ብዛት</th><th className="p-3">የሽያጭ ዋጋ</th><th className="p-3">ኮሚሽን</th></tr></thead><tbody>{rows.map(r=><tr key={r.performance_date+String(r.branch_id)} className="border-b last:border-0 dark:border-zinc-800"><td className="p-3">{r.performance_date}</td><td className="p-3 text-center">{r.sale_count}</td><td className="p-3 text-center">{r.total_quantity}</td><td className="p-3 text-right">{money(r.total_sales_value)} ብር</td><td className="p-3 text-right">{money(r.total_commission)} ብር</td></tr>)}{!loading&&!rows.length&&<tr><td colSpan="5" className="p-8 text-center text-zinc-500">በዚህ ጊዜ የተረጋገጠ ሽያጭ የለም።</td></tr>}</tbody></table></div></div>
+  <div className="rounded-2xl border bg-white dark:border-zinc-800 dark:bg-zinc-900"><div className="border-b p-4 font-bold dark:border-zinc-800">የምርት አፈጻጸም</div><div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b dark:border-zinc-800"><th className="p-3 text-left">Product ID</th><th className="p-3">ብዛት</th><th className="p-3">የሽያጭ ዋጋ</th><th className="p-3">ኮሚሽን</th></tr></thead><tbody>{productTotals.map(r=><tr key={r.id} className="border-b last:border-0 dark:border-zinc-800"><td className="p-3">{r.id}</td><td className="p-3 text-center">{r.qty}</td><td className="p-3 text-right">{money(r.value)} ብር</td><td className="p-3 text-right">{money(r.commission)} ብር</td></tr>)}</tbody></table></div></div>
+ </section>
+}
+function Metric({title,value}){return <div className="rounded-2xl border bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900"><div className="text-xs text-zinc-500">{title}</div><div className="mt-2 text-xl font-black">{value}</div></div>}
