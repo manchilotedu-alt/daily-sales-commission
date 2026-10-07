@@ -61,7 +61,7 @@ export default function App(){
   <p className="mt-5 text-center text-xs text-zinc-500">Dirsha-ድርሻ</p>
  </form></div>
 
- const items=global?['dashboard','branches','users','teams','sales','commissions','earnings','reports','profile']:branchAdmin?['dashboard','users','teams','sales','commissions','earnings','reports','profile']:['dashboard','sales','commissions','earnings','reports','profile']
+ const items=global?['dashboard','branches','users','teams','products','sales','commissions','earnings','reports','profile']:branchAdmin?['dashboard','users','teams','sales','commissions','earnings','reports','profile']:['dashboard','sales','commissions','earnings','reports','profile']
  return <div className="min-h-screen bg-zinc-100 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100">
   <header className="sticky top-0 z-30 border-b bg-white/95 px-4 py-4 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/95"><div className="mx-auto flex max-w-7xl items-center justify-between gap-3"><div><div className="font-black text-emerald-600 dark:text-emerald-400">Dirsha-ድርሻ</div><div className="text-xs text-zinc-500">{roles[role]||role}</div></div><button onClick={logout} className="btn-secondary">ውጣ</button></div></header>
   <main className="mx-auto max-w-7xl p-4 md:p-6">
