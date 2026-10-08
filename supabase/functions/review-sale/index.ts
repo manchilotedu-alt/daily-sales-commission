@@ -58,7 +58,7 @@ Deno.serve(async req=>{
 
   const before={status:sale.status,reject_reason:null,verified_by:null,verified_at:null}
   const update=action==='verify'
-   ?{status:'verified',verified_by:caller.id,verified_at:new Date().toISOString(),reject_reason:null}
+   ?{status:'approved',verified_by:caller.id,verified_at:new Date().toISOString(),reject_reason:null}
    :{status:'rejected',verified_by:caller.id,verified_at:new Date().toISOString(),reject_reason:reason}
   const {data:updated,error:updateError}=await admin.from('sales').update(update).eq('id',saleId).eq('status','pending')
    .select('id,status,verified_by,verified_at,reject_reason').maybeSingle()
@@ -67,7 +67,7 @@ Deno.serve(async req=>{
 
   const {error:auditError}=await admin.from('audit_logs').insert({
    organization_id:sale.organization_id,branch_id:sale.branch_id,actor_id:caller.id,
-   action:action==='verify'?'sale_verified':'sale_rejected',entity_type:'sale',entity_id:saleId,
+   action:action==='verify'?'sale_approved':'sale_rejected',entity_type:'sale',entity_id:saleId,
    before_data:before,after_data:updated,reason:reason||null
   })
   if(auditError)throw auditError
