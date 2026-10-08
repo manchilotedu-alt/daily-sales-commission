@@ -3,7 +3,7 @@ import {supabase} from './lib/supabase'
 
 const roles={lead:'መሪ ሻጭ',lead_sales:'መሪ ሻጭ',assistant:'ረዳት',driver:'ሾፌር'}
 const money=n=>Number(n||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})
-const statusLabel=s=>s==='pending'?'በመጠባበቅ ላይ':s==='verified'?'ተረጋግጧል':s==='rejected'?'ተመልሷል':s||'—'
+const statusLabel=s=>s==='pending'?'በመጠባበቅ ላይ':s==='approved'?'ተፈቅዷል':s==='rejected'?'ተመልሷል':s||'—'
 
 export function SalesReviewPage({user}){
  const [sales,setSales]=useState([]),[loading,setLoading]=useState(true),[error,setError]=useState(''),[busy,setBusy]=useState(null),[open,setOpen]=useState(null)
