@@ -106,3 +106,65 @@
   .workspace-main .rounded-2xl { border-radius: 1rem; }
   .workspace-main table { min-width: 560px; }
 }
+
+
+/* Stronger, clearly visible interior-page palette (v2). */
+.workspace-main {
+  background-color: #eef4fb !important;
+  background-image:
+    radial-gradient(ellipse at 0% 0%, rgba(20,184,166,.13), transparent 35%),
+    radial-gradient(ellipse at 100% 0%, rgba(59,130,246,.12), transparent 32%),
+    linear-gradient(180deg, #eef4fb 0%, #f5f8fc 55%, #edf5f4 100%) !important;
+}
+.workspace-main section.space-y-5 > div:first-child h2,
+.workspace-main section.space-y-6 > div:first-child h2 {
+  color: #12345b !important;
+}
+.workspace-main .rounded-2xl.bg-white,
+.workspace-main .rounded-2xl.border.bg-white,
+.workspace-main .overflow-x-auto.rounded-2xl.bg-white,
+.workspace-main .rounded-2xl.border.border-slate-200\/80.bg-white {
+  background: linear-gradient(145deg, #ffffff 0%, #f0f7ff 100%) !important;
+  border-color: #bfd4e9 !important;
+  box-shadow: 0 8px 24px rgba(24, 58, 96, .09) !important;
+}
+.workspace-main .rounded-2xl.border.border-slate-200\/80.bg-white:hover,
+.workspace-main .rounded-2xl.border.bg-white:hover {
+  border-color: #75b9a8 !important;
+  box-shadow: 0 10px 26px rgba(15, 118, 110, .12) !important;
+}
+.workspace-main table thead,
+.workspace-main table thead tr {
+  background: linear-gradient(90deg, #dcecff 0%, #d9f5ed 100%) !important;
+}
+.workspace-main table thead th {
+  color: #17436b !important;
+  border-bottom: 2px solid #a9cbe5 !important;
+}
+.workspace-main table tbody tr:nth-child(even) {
+  background-color: #f5f9fe;
+}
+.workspace-main table tbody tr:hover {
+  background-color: #dff7ed !important;
+}
+.workspace-main input:not([type="checkbox"]),
+.workspace-main select,
+.workspace-main textarea {
+  border-color: #c1d3e5 !important;
+  background-color: #f8fbff !important;
+}
+.workspace-main .btn {
+  background: linear-gradient(135deg, #0e9f6e 0%, #087f8c 100%) !important;
+  border-color: #087f70 !important;
+  color: #fff !important;
+}
+.workspace-main .btn-secondary {
+  background: linear-gradient(135deg, #e2efff 0%, #d9f5ed 100%) !important;
+  border-color: #b7d4e7 !important;
+  color: #16466b !important;
+}
+/* Keep the dashboard KPI tiles visibly differentiated by their icon accent. */
+.workspace-main .bg-emerald-50.text-emerald-700 { background-color: #c8f4e2 !important; color: #087a55 !important; }
+.workspace-main .bg-blue-50.text-blue-700 { background-color: #d7eaff !important; color: #1459a6 !important; }
+.workspace-main .bg-violet-50.text-violet-700 { background-color: #e9ddff !important; color: #6335a5 !important; }
+.workspace-main .bg-amber-50.text-amber-700 { background-color: #ffedbd !important; color: #975b00 !important; }
