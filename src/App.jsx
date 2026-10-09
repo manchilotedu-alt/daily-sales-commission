@@ -111,7 +111,7 @@ export default function App(){
     <nav className="mt-3 flex gap-2 overflow-x-auto pb-1 md:hidden">{items.map(x=><button key={x} onClick={()=>setPage(x)} className={`whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold ${page===x?'bg-emerald-600 text-white':'bg-slate-100 text-slate-600 dark:bg-zinc-800 dark:text-zinc-300'}`}>{nav[x]}</button>)}</nav>
    </header>
    <main className="mx-auto max-w-[1600px] p-4 md:p-8">
-    {page==='dashboard'&&<Dashboard user={user} global={global} branchAdmin={branchAdmin} setPage={setPage}/>}{page==='products'&&(global||branchAdmin)&&<ProductsPage user={user}/>}
+    {page==='dashboard'&&<Dashboard user={user} global={global} branchAdmin={branchAdmin} setPage={setPage} items={items}/>}{page==='products'&&(global||branchAdmin)&&<ProductsPage user={user}/>}
     {page==='branches'&&global&&<OrganizationManagement/>}
     {page==='users'&&(global||branchAdmin)&&<UserManagement currentUser={user}/>} {page==='teams'&&(global||branchAdmin)&&<TeamManagement currentUser={user}/>}
     {page==='sales'&&<SalesPage user={user}/>} {page==='commissions'&&(global||branchAdmin)&&<SalesReviewPage user={user}/>} {page==='reports'&&<ReportsPage user={user}/>} {page==='earnings'&&(global||branchAdmin||role==='lead'||role==='lead_sales'||role==='assistant'||role==='driver')&&<EarningsPage user={user}/>}  {page==='profile'&&<Placeholder title={nav[page]}/>}
@@ -119,7 +119,7 @@ export default function App(){
   </div>
  </div>
 }
-function Dashboard({user,global,branchAdmin,setPage}){
+function Dashboard({user,global,branchAdmin,setPage,items=[]}){
  const [stats,setStats]=useState({employees:0,teams:0,products:0,sales:0,commission:0,saleCount:0,approved:0,pending:0,paid:0,week:[]})
  const [period,setPeriod]=useState('month'),[loading,setLoading]=useState(true),[error,setError]=useState('')
  useEffect(()=>{let live=true;(async()=>{try{
