@@ -1,3 +1,108 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+
+/* Dirsha workspace visual system: keep internal pages consistent with the navy/emerald shell. */
+@layer base {
+  body { background: #f3f6fb; }
+  button, input, select, textarea { font: inherit; }
+}
+.workspace-main {
+  min-height: calc(100vh - 76px);
+  background:
+    radial-gradient(ellipse at 8% 0%, rgba(16,185,129,.055), transparent 32%),
+    radial-gradient(ellipse at 95% 8%, rgba(59,130,246,.055), transparent 28%);
+}
+.workspace-main section.space-y-5 > div:first-child h2 {
+  color: #172b4d;
+  letter-spacing: -.025em;
+}
+.workspace-main section.space-y-5 > div:first-child p {
+  margin-top: .35rem;
+  color: #718096;
+}
+.workspace-main .rounded-2xl.border.bg-white,
+.workspace-main .rounded-2xl.bg-white,
+.workspace-main .overflow-x-auto.rounded-2xl.bg-white {
+  border-color: #dce5f0;
+  background: linear-gradient(145deg, #ffffff 0%, #f8fbff 100%);
+  box-shadow: 0 5px 18px rgba(27, 51, 84, .045);
+}
+.workspace-main .rounded-2xl.border.bg-white:hover {
+  border-color: #c6d8e9;
+}
+.workspace-main table thead {
+  background: linear-gradient(90deg, #edf5fb, #f1f8f6);
+}
+.workspace-main table thead th {
+  color: #43566f;
+  font-size: .75rem;
+  font-weight: 800;
+  letter-spacing: .025em;
+  white-space: nowrap;
+}
+.workspace-main table tbody tr {
+  transition: background-color .15s ease;
+}
+.workspace-main table tbody tr:hover {
+  background: rgba(16, 185, 129, .055);
+}
+.workspace-main .input,
+.workspace-main input:not([type="checkbox"]),
+.workspace-main select,
+.workspace-main textarea {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid #d5dfeb;
+  border-radius: .75rem;
+  background: #fbfdff;
+  color: #1e293b;
+  padding: .65rem .8rem;
+  outline: none;
+  transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+}
+.workspace-main .input:focus,
+.workspace-main input:focus,
+.workspace-main select:focus,
+.workspace-main textarea:focus {
+  border-color: #10a778;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(16, 167, 120, .12);
+}
+.workspace-main .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .45rem;
+  border: 1px solid #07875f;
+  border-radius: .8rem;
+  background: linear-gradient(135deg, #0b9b6c, #087f5b);
+  color: white;
+  padding: .7rem 1rem;
+  font-weight: 800;
+  box-shadow: 0 5px 12px rgba(8, 127, 91, .16);
+  transition: transform .15s ease, filter .15s ease, box-shadow .15s ease;
+}
+.workspace-main .btn:hover:not(:disabled) { filter: brightness(1.04); transform: translateY(-1px); box-shadow: 0 7px 16px rgba(8,127,91,.22); }
+.workspace-main .btn:disabled { opacity: .55; cursor: not-allowed; box-shadow: none; }
+.workspace-main .btn-secondary {
+  border: 1px solid #c9d7e6;
+  border-radius: .7rem;
+  background: #edf4fa;
+  color: #344861;
+  padding: .55rem .8rem;
+  font-weight: 700;
+}
+.workspace-main .btn-secondary:hover { background: #e1edf6; }
+.workspace-main button:not(.btn):not(.btn-secondary) { transition: color .15s ease, background-color .15s ease, border-color .15s ease; }
+.workspace-main .text-rose-300 { color: #be123c; }
+.workspace-main .text-emerald-300 { color: #047857; }
+.workspace-main .bg-rose-500\/10 { background-color: #fff1f2; }
+.workspace-main .bg-emerald-500\/10 { background-color: #ecfdf5; }
+.workspace-main .bg-slate-50 { background-color: #f5f8fc; }
+@media (max-width: 640px) {
+  .workspace-main { padding: 1rem; }
+  .workspace-main .rounded-2xl { border-radius: 1rem; }
+  .workspace-main table { min-width: 560px; }
+}
