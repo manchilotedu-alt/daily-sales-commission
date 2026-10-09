@@ -92,82 +92,75 @@ export default function App(){
  </form></div>
 
  const items=global?['dashboard','branches','users','teams','products','sales','commissions','earnings','reports','profile']:branchAdmin?['dashboard','users','teams','products','sales','commissions','earnings','reports','profile']:['dashboard','sales','commissions','earnings','reports','profile']
- return <div className="min-h-screen bg-zinc-100 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100">
-  <header className="sticky top-0 z-30 border-b bg-white/95 px-4 py-4 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/95"><div className="mx-auto flex max-w-7xl items-center justify-between gap-3"><div><div className="font-black text-emerald-600 dark:text-emerald-400">Dirsha-ድርሻ</div><div className="text-xs text-zinc-500">{roles[role]||role}</div></div><button onClick={logout} className="btn-secondary">ውጣ</button></div></header>
-  <main className="mx-auto max-w-7xl p-4 md:p-6">
-   <nav className="mb-6 flex gap-2 overflow-x-auto pb-1">{items.map(x=><button key={x} onClick={()=>setPage(x)} className={`whitespace-nowrap rounded-lg px-4 py-2 text-sm font-semibold ${page===x?'bg-emerald-600 text-white':'bg-white dark:bg-zinc-900'}`}>{nav[x]}</button>)}</nav>
-   {page==='dashboard'&&<Dashboard user={user} global={global} branchAdmin={branchAdmin} setPage={setPage}/>}{page==='products'&&(global||branchAdmin)&&<ProductsPage user={user}/>}
-   {page==='branches'&&global&&<OrganizationManagement/>}
-   {page==='users'&&(global||branchAdmin)&&<UserManagement currentUser={user}/>} {page==='teams'&&(global||branchAdmin)&&<TeamManagement currentUser={user}/>}
-   {page==='sales'&&<SalesPage user={user}/>} {page==='commissions'&&(global||branchAdmin)&&<SalesReviewPage user={user}/>} {page==='reports'&&<ReportsPage user={user}/>} {page==='earnings'&&(global||branchAdmin||role==='lead'||role==='lead_sales'||role==='assistant'||role==='driver')&&<EarningsPage user={user}/>}  {page==='profile'&&<Placeholder title={nav[page]}/>}  
-  </main>
+ return <div className="min-h-screen bg-[#f5f7fb] text-slate-900 dark:bg-zinc-950 dark:text-zinc-100 md:flex">
+  <aside className="hidden w-64 shrink-0 flex-col border-r border-slate-200 bg-[#101827] text-slate-200 md:flex">
+   <div className="flex h-20 items-center gap-3 border-b border-white/10 px-6"><div className="grid h-10 w-10 place-items-center rounded-xl bg-emerald-400 text-xl font-black text-slate-950">D</div><div><div className="font-black tracking-wide text-white">Dirsha<span className="text-emerald-400">-ድርሻ</span></div><div className="text-[11px] text-slate-400">Commission workspace</div></div></div>
+   <div className="px-4 pt-6 text-[10px] font-bold uppercase tracking-[.2em] text-slate-500">Workspace</div>
+   <nav className="flex-1 space-y-1 px-3 py-3">{items.map(x=><button key={x} onClick={()=>setPage(x)} className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold transition ${page===x?'bg-emerald-400 text-slate-950 shadow-lg shadow-emerald-950/20':'text-slate-300 hover:bg-white/5 hover:text-white'}`}><span className="w-5 text-center">{({dashboard:'▦',products:'▤',branches:'⌂',users:'♙',teams:'♧',workforce:'◷',sales:'↗',commissions:'％',earnings:'◈',reports:'▥',profile:'◉'})[x]||'•'}</span>{nav[x]}{page===x&&<span className="ml-auto h-1.5 w-1.5 rounded-full bg-slate-950"/>}</button>)}</nav>
+   <div className="border-t border-white/10 p-4"><div className="mb-3 flex items-center gap-3 rounded-xl bg-white/5 p-3"><div className="grid h-9 w-9 place-items-center rounded-full bg-slate-700 font-bold text-white">{(user.full_name||'D').slice(0,1)}</div><div className="min-w-0"><div className="truncate text-sm font-semibold text-white">{user.full_name||'User'}</div><div className="truncate text-xs text-slate-400">{roles[role]||role}</div></div></div><button onClick={logout} className="w-full rounded-xl border border-white/10 px-3 py-2.5 text-left text-sm text-slate-300 hover:bg-white/5">↪ ውጣ</button></div>
+  </aside>
+  <div className="min-w-0 flex-1">
+   <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/90 px-4 py-3 backdrop-blur-xl dark:border-zinc-800 dark:bg-zinc-900/90 md:px-8"><div className="flex items-center justify-between gap-4"><div><div className="text-xs font-semibold text-slate-400">DIRSHA / WORKSPACE</div><h1 className="mt-1 text-lg font-black">{nav[page]||'Dashboard'}</h1></div><div className="flex items-center gap-2"><div className="hidden rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-400 sm:block dark:border-zinc-700 dark:bg-zinc-800">⌕ ፈልግ…</div><div className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 bg-white text-lg dark:border-zinc-700 dark:bg-zinc-800">♧</div><button onClick={()=>setPage('profile')} className="grid h-10 w-10 place-items-center rounded-xl bg-emerald-100 font-bold text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">{(user.full_name||'D').slice(0,1)}</button></div></div>
+    <nav className="mt-3 flex gap-2 overflow-x-auto pb-1 md:hidden">{items.map(x=><button key={x} onClick={()=>setPage(x)} className={`whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold ${page===x?'bg-emerald-600 text-white':'bg-slate-100 text-slate-600 dark:bg-zinc-800 dark:text-zinc-300'}`}>{nav[x]}</button>)}</nav>
+   </header>
+   <main className="mx-auto max-w-[1600px] p-4 md:p-8">
+    {page==='dashboard'&&<Dashboard user={user} global={global} branchAdmin={branchAdmin} setPage={setPage}/>}{page==='products'&&(global||branchAdmin)&&<ProductsPage user={user}/>}
+    {page==='branches'&&global&&<OrganizationManagement/>}
+    {page==='users'&&(global||branchAdmin)&&<UserManagement currentUser={user}/>} {page==='teams'&&(global||branchAdmin)&&<TeamManagement currentUser={user}/>}
+    {page==='sales'&&<SalesPage user={user}/>} {page==='commissions'&&(global||branchAdmin)&&<SalesReviewPage user={user}/>} {page==='reports'&&<ReportsPage user={user}/>} {page==='earnings'&&(global||branchAdmin||role==='lead'||role==='lead_sales'||role==='assistant'||role==='driver')&&<EarningsPage user={user}/>}  {page==='profile'&&<Placeholder title={nav[page]}/>}
+   </main>
+  </div>
  </div>
 }
-function Dashboard({user,global,branchAdmin,setPage}){ 
- const [stats,setStats]=useState({employees:0,teams:0,products:0,sales:0,commission:0})
- const [loading,setLoading]=useState(true)
- const [error,setError]=useState('')
+function Dashboard({user,global,branchAdmin,setPage}){
+ const [stats,setStats]=useState({employees:0,teams:0,products:0,sales:0,commission:0,saleCount:0,approved:0,pending:0,paid:0,week:[]})
+ const [period,setPeriod]=useState('month'),[loading,setLoading]=useState(true),[error,setError]=useState('')
  useEffect(()=>{let live=true;(async()=>{try{
-   const org=user?.organization_id,branch=user?.branch_id
-   if(!org){if(live)setLoading(false);return}
-   const scope=q=>{let x=q.eq('organization_id',org);if(branchAdmin&&branch)x=x.eq('branch_id',branch);return x}
-   const [employees,teams,products,sales]=await Promise.all([
-     supabase.from('profiles').select('id',{count:'exact',head:true}).eq('organization_id',org).eq('active',true),
-     supabase.from('teams').select('id',{count:'exact',head:true}).eq('organization_id',org).eq('active',true),
-     supabase.from('products').select('id',{count:'exact',head:true}).eq('organization_id',org).eq('active',true),
-     scope(supabase.from('sales').select('id,total_sales_value,gross_commission')).limit(500)
-   ])
-   if(!live)return
-   const firstError=employees.error||teams.error||products.error||sales.error
-   if(firstError){setError(firstError.message);setLoading(false);return}
-   const saleRows=sales.data||[]
-   setStats({employees:employees.count||0,teams:teams.count||0,products:products.count||0,sales:saleRows.reduce((n,r)=>n+Number(r.total_sales_value||0),0),commission:saleRows.reduce((n,r)=>n+Number(r.gross_commission||0),0)})
-   setLoading(false)
+  const org=user?.organization_id,branch=user?.branch_id
+  if(!org){if(live)setLoading(false);return}
+  const scope=q=>{let x=q.eq('organization_id',org);if(branchAdmin&&branch)x=x.eq('branch_id',branch);return x}
+  const now=new Date(),from=new Date(now)
+  if(period==='today')from.setHours(0,0,0,0)
+  else if(period==='week')from.setDate(now.getDate()-6)
+  else from.setDate(1)
+  const [employees,teams,products,sales]=await Promise.all([
+   supabase.from('profiles').select('id',{count:'exact',head:true}).eq('organization_id',org).eq('active',true),
+   supabase.from('teams').select('id',{count:'exact',head:true}).eq('organization_id',org).eq('active',true),
+   supabase.from('products').select('id',{count:'exact',head:true}).eq('organization_id',org).eq('active',true),
+   scope(supabase.from('sales').select('id,total_sales_value,gross_commission,created_at,status')).gte('created_at',from.toISOString()).lte('created_at',now.toISOString()).order('created_at',{ascending:false}).limit(1000)
+  ])
+  if(!live)return
+  const err=employees.error||teams.error||products.error||sales.error
+  if(err){setError(err.message);setLoading(false);return}
+  const rows=sales.data||[],approved=rows.filter(r=>r.status==='approved'),pending=rows.filter(r=>['pending','submitted','under_review'].includes(r.status))
+  const week=Array.from({length:7},(_,i)=>{const d=new Date();d.setDate(d.getDate()-(6-i));d.setHours(0,0,0,0);const next=new Date(d);next.setDate(next.getDate()+1);const dayRows=rows.filter(r=>r.created_at&&new Date(r.created_at)>=d&&new Date(r.created_at)<next);return {label:d.toLocaleDateString(undefined,{weekday:'short'}),sales:dayRows.reduce((n,r)=>n+Number(r.total_sales_value||0),0),count:dayRows.length}})
+  setStats({employees:employees.count||0,teams:teams.count||0,products:products.count||0,sales:rows.reduce((n,r)=>n+Number(r.total_sales_value||0),0),commission:rows.reduce((n,r)=>n+Number(r.gross_commission||0),0),saleCount:rows.length,approved:approved.length,pending:pending.length,paid:rows.filter(r=>r.status==='paid').length,week});setLoading(false)
  }catch(e){if(live){setError(e.message||'Dashboard መረጃ ማምጣት አልተቻለም።');setLoading(false)}}})()
  return()=>{live=false}
- },[user?.organization_id,user?.branch_id,branchAdmin])
- const statCards=[
-  ['ሰራተኞች',stats.employees,'👥','active'],
-  ['ቡድኖች',stats.teams,'🚚','active'],
-  ['ንቁ ምርቶች',stats.products,'📦','active'],
-  ['ጠቅላላ ሽያጭ',stats.sales.toLocaleString()+' ብር','📈','money'],
-  ['ጠቅላላ Commission',stats.commission.toLocaleString()+' ብር','💰','money']
+ },[user?.organization_id,user?.branch_id,branchAdmin,period])
+ const money=v=>Number(v||0).toLocaleString(undefined,{maximumFractionDigits:2})
+ const maxBar=Math.max(1,...stats.week.map(d=>d.sales))
+ const cards=[
+  {label:'ጠቅላላ ሽያጭ',value:money(stats.sales)+' ብር',hint:stats.saleCount+' ሽያጮች',icon:'↗',tone:'emerald'},
+  {label:'ጠቅላላ ኮሚሽን',value:money(stats.commission)+' ብር',hint:'በተመረጠው ጊዜ',icon:'◈',tone:'blue'},
+  {label:'ንቁ ሰራተኞች',value:money(stats.employees),hint:'በድርጅቱ ውስጥ',icon:'♙',tone:'violet'},
+  {label:'ንቁ ምርቶች',value:money(stats.products),hint:'የሚሸጡ ምርቶች',icon:'▤',tone:'amber'}
  ]
  return <section className="space-y-6">
-  <div className="relative overflow-hidden rounded-3xl border border-emerald-900/10 bg-gradient-to-br from-emerald-700 via-emerald-600 to-teal-500 p-6 text-white shadow-xl md:p-8">
-   <div className="absolute -right-10 -top-16 h-48 w-48 rounded-full bg-white/10 blur-2xl"/>
-   <div className="absolute -bottom-20 right-20 h-56 w-56 rounded-full bg-lime-300/10 blur-3xl"/>
-   <div className="relative">
-    <div className="text-sm font-semibold text-emerald-100">Dirsha-ድርሻ · የአስተዳደር ማዕከል</div>
-    <h2 className="mt-2 text-3xl font-black tracking-tight md:text-4xl">እንኳን ደህና መጡ፣ {user.full_name||'ተጠቃሚ'}!</h2>
-    <p className="mt-2 max-w-2xl text-sm text-emerald-50 md:text-base">{global?'የድርጅቶች፣ ሰራተኞች፣ ሽያጭ እና ኮሚሽን አጠቃላይ እይታ።':branchAdmin?'የቅርንጫፍዎን ዕለታዊ እንቅስቃሴ ከአንድ ቦታ ይከታተሉ።':'የሽያጭ እና የገቢ እንቅስቃሴዎን በቀላሉ ይከታተሉ።'}</p>
-    <div className="mt-5 flex flex-wrap gap-2 text-xs"><span className="rounded-full bg-white/15 px-3 py-1.5 backdrop-blur">{roles[user.role]||user.role}</span><span className="rounded-full bg-white/15 px-3 py-1.5 backdrop-blur">{user.branch_id?'ቅርንጫፍ ያለው አካባቢ':'ድርጅት ደረጃ'}</span></div>
+  <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="text-xs font-bold uppercase tracking-[.18em] text-emerald-700 dark:text-emerald-400">OVERVIEW / DASHBOARD</p><h2 className="mt-2 text-3xl font-black tracking-tight">ሰላም፣ {user.full_name||'ተጠቃሚ'} 👋</h2><p className="mt-1 text-sm text-slate-500">የድርጅትዎን ሽያጭ፣ ኮሚሽን እና የሰራተኞች እንቅስቃሴ በአንድ ቦታ ይከታተሉ።</p></div><div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white p-1.5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">{[['today','ዛሬ'],['week','7 ቀን'],['month','ይህ ወር']].map(([v,l])=><button key={v} onClick={()=>{setLoading(true);setPeriod(v)}} className={`rounded-lg px-3 py-2 text-xs font-bold ${period===v?'bg-slate-900 text-white dark:bg-emerald-500 dark:text-slate-950':'text-slate-500 hover:bg-slate-100 dark:hover:bg-zinc-800'}`}>{l}</button>)}</div></div>
+  {error&&<div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-300">{error}</div>}
+  <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{cards.map((c,i)=><div key={c.label} className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900"><div className="flex items-center justify-between"><span className="text-sm font-semibold text-slate-500">{c.label}</span><span className={`grid h-11 w-11 place-items-center rounded-xl text-xl font-black ${['bg-emerald-50 text-emerald-700','bg-blue-50 text-blue-700','bg-violet-50 text-violet-700','bg-amber-50 text-amber-700'][i]}`}>{c.icon}</span></div><div className="mt-5 text-2xl font-black tracking-tight">{loading?'—':c.value}</div><div className="mt-2 text-xs text-slate-400">{c.hint}</div></div>)}</div>
+  <div className="grid gap-5 xl:grid-cols-[1.65fr_1fr]">
+   <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-6"><div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-black">የሽያጭ እንቅስቃሴ</h3><p className="mt-1 text-xs text-slate-500">የመጨረሻዎቹ 7 ቀናት · በብር</p></div><button onClick={()=>setPage('reports')} className="rounded-lg border px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800">ሪፖርት ይመልከቱ ↗</button></div>
+    <div className="mt-7 flex h-48 items-end gap-2 sm:gap-4">{stats.week.map((d,i)=><div key={d.label+i} className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-2"><div className="flex h-full w-full items-end justify-center"><div title={money(d.sales)+' ብር'} className={`w-full max-w-12 rounded-t-lg transition-all ${i===6?'bg-emerald-500':'bg-emerald-200 dark:bg-emerald-900'}`} style={{height:loading?'4%':Math.max(4,d.sales/maxBar*100)+'%'}}/></div><span className="text-[10px] font-semibold text-slate-400">{d.label}</span></div>)}</div><div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-4 text-xs dark:border-zinc-800"><span className="text-slate-500">በተመረጠው ጊዜ የተመዘገበ ሽያጭ</span><b>{loading?'—':money(stats.sales)+' ብር'}</b></div>
    </div>
+   <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-6"><div className="flex items-center justify-between"><div><h3 className="font-black">የሽያጭ ሁኔታ</h3><p className="mt-1 text-xs text-slate-500">የአሁኑ ጊዜ ማጠቃለያ</p></div><span className="text-xl">◉</span></div><div className="mt-6 space-y-5">{[['የተፈቀዱ ሽያጮች',stats.approved,'bg-emerald-500'],['በመጠባበቅ ላይ',stats.pending,'bg-amber-400'],['የተከፈሉ ሽያጮች',stats.paid,'bg-blue-500']].map(([label,value,color])=><div key={label}><div className="mb-2 flex items-center justify-between text-sm"><span className="text-slate-500">{label}</span><b>{loading?'—':value}</b></div><div className="h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-zinc-800"><div className={`h-full rounded-full ${color}`} style={{width:loading?'0%':Math.min(100,stats.saleCount?value/stats.saleCount*100:0)+'%'}}/></div></div>)}</div><button onClick={()=>setPage('sales')} className="mt-7 w-full rounded-xl bg-slate-900 px-4 py-3 text-sm font-bold text-white hover:bg-slate-700 dark:bg-emerald-500 dark:text-slate-950">ሽያጮችን ይክፈቱ →</button></div>
   </div>
-  {error&&<div className="rounded-2xl border border-rose-300 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-300">{error}</div>}
-  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-   {statCards.map(([label,value,icon,type])=><div key={label} className="group rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-sm transition hover:-translate-y-1 hover:shadow-lg dark:border-zinc-800 dark:bg-zinc-900">
-    <div className="flex items-center justify-between"><div className="grid h-11 w-11 place-items-center rounded-2xl bg-emerald-50 text-xl dark:bg-emerald-950/50">{icon}</div><span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">{type==='money'?'ETB':'LIVE'}</span></div>
-    <div className="mt-4 text-xs font-semibold text-zinc-500">{label}</div><div className="mt-1 text-2xl font-black tracking-tight">{loading?'—':value}</div>
-   </div>)}
+  <div className="grid gap-5 lg:grid-cols-[1.2fr_1fr]">
+   <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"><div className="flex items-center justify-between"><div><h3 className="font-black">ፈጣን መዳረሻ</h3><p className="mt-1 text-xs text-slate-500">በብዛት የሚጠቀሙትን ክፍል ይክፈቱ</p></div><span className="text-xs text-slate-400">SHORTCUTS</span></div><div className="mt-4 grid gap-3 sm:grid-cols-2">{([['sales','↗','ሽያጭ','ሽያጭ ይመዝግቡ'],['commissions','％','ኮሚሽን','ሽያጭ ይገምግሙ'],['earnings','◈','ገቢ እና ክፍያ','የክፍያ ሁኔታ'],['reports','▥','ሪፖርቶች','ዝርዝር መረጃ']]).filter(([p])=>items.includes(p)).map(([p,icon,label,desc])=><button key={p} onClick={()=>setPage(p)} className="flex items-center gap-3 rounded-xl border border-slate-100 p-4 text-left transition hover:border-emerald-300 hover:bg-emerald-50/60 dark:border-zinc-800 dark:hover:bg-emerald-950/20"><span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-slate-100 text-lg font-black dark:bg-zinc-800">{icon}</span><span><span className="block text-sm font-bold">{label}</span><span className="mt-1 block text-xs text-slate-400">{desc}</span></span><span className="ml-auto text-slate-400">→</span></button>)}</div></div>
+   <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"><h3 className="font-black">የድርጅት ማጠቃለያ</h3><p className="mt-1 text-xs text-slate-500">የስራ አካባቢዎ በአንድ እይታ</p><div className="mt-4 space-y-3">{[['የአሁኑ ሚና',roles[user.role]||user.role],['የስራ ወሰን',user.branch_id?'ቅርንጫፍ':'ድርጅት'],['ንቁ ቡድኖች',loading?'—':stats.teams],['ኮሚሽን ማጠቃለያ',loading?'—':money(stats.commission)+' ብር']].map(([k,v])=><div key={k} className="flex items-center justify-between gap-4 border-b border-slate-100 pb-3 text-sm last:border-0 last:pb-0 dark:border-zinc-800"><span className="text-slate-500">{k}</span><b className="text-right">{v}</b></div>)}</div></div>
   </div>
-  <div className="grid gap-5 lg:grid-cols-[1.5fr_1fr]">
-   <div className="rounded-3xl border bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-    <div className="flex items-center justify-between"><div><h3 className="text-lg font-black">የስራ እንቅስቃሴ</h3><p className="mt-1 text-xs text-zinc-500">Dirsha-ድርሻ የዛሬ አጠቃላይ እይታ</p></div><div className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">Overview</div></div>
-    <div className="mt-6 grid gap-3 sm:grid-cols-3">
-      <div className="rounded-2xl bg-zinc-50 p-4 dark:bg-zinc-800/60"><div className="text-xs text-zinc-500">የሽያጭ ዋጋ</div><div className="mt-2 text-xl font-black">{loading?'—':stats.sales.toLocaleString()+' ብር'}</div></div>
-      <div className="rounded-2xl bg-zinc-50 p-4 dark:bg-zinc-800/60"><div className="text-xs text-zinc-500">Commission</div><div className="mt-2 text-xl font-black">{loading?'—':stats.commission.toLocaleString()+' ብር'}</div></div>
-      <div className="rounded-2xl bg-zinc-50 p-4 dark:bg-zinc-800/60"><div className="text-xs text-zinc-500">የአሁኑ ሁኔታ</div><div className="mt-2 text-xl font-black text-emerald-600">ንቁ</div></div>
-    </div>
-    <div className="mt-5 rounded-2xl border border-dashed p-5 text-sm text-zinc-500">የዕለት፣ የሳምንት እና የወር ግራፎች ከPerformance ሞጁል ጋር በሚቀጥለው ደረጃ ይገናኛሉ።</div>
-   </div>
-   <div className="rounded-3xl border bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-    <h3 className="text-lg font-black">ፈጣን መዳረሻ</h3><p className="mt-1 text-xs text-zinc-500">በብዛት የሚጠቀሙትን ክፍል በቀጥታ ይክፈቱ።</p>
-    <div className="mt-5 space-y-3">
-      {([['products','📦','ምርቶች'],['sales','🛒','ሽያጭ'],['teams','👥','ቡድኖች'],['earnings','💰','ገቢ እና ክፍያ']]).filter(([p])=>global||branchAdmin||p==='sales'||p==='earnings').map(([p,i,l])=><button key={p} onClick={()=>setPage(p)} className="flex w-full items-center justify-between rounded-2xl border p-4 text-left transition hover:border-emerald-400 hover:bg-emerald-50 dark:border-zinc-800 dark:hover:bg-emerald-950/30"><span className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-zinc-100 dark:bg-zinc-800">{i}</span><span className="font-bold">{l}</span></span><span className="text-zinc-400">→</span></button>)}
-    </div>
-   </div>
-  </div>
+  <div className="flex flex-wrap items-center justify-between gap-2 pb-2 text-xs text-slate-400"><span>Dirsha-ድርሻ · Commission Management</span><span>ሚናዎ የሚፈቅደውን መረጃ ብቻ ያያሉ።</span></div>
  </section>
 }
 function Card({title,value}){return <div className="rounded-2xl border bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900"><div className="text-xs text-zinc-500">{title}</div><div className="mt-2 break-all font-bold">{value}</div></div>}
