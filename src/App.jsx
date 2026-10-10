@@ -130,17 +130,19 @@ function Dashboard({user,global,branchAdmin,setPage,items=[]}){
   if(period==='today')from.setHours(0,0,0,0)
   else if(period==='week')from.setDate(now.getDate()-6)
   else from.setDate(1)
-  const [employees,teams,products,sales]=await Promise.all([
+  const weekStart=new Date(now);weekStart.setDate(now.getDate()-6);weekStart.setHours(0,0,0,0)
+  const [employees,teams,products,sales,weeklySales]=await Promise.all([
    supabase.from('profiles').select('id',{count:'exact',head:true}).eq('organization_id',org).eq('active',true),
    supabase.from('teams').select('id',{count:'exact',head:true}).eq('organization_id',org).eq('active',true),
    supabase.from('products').select('id',{count:'exact',head:true}).eq('organization_id',org).eq('active',true),
-   scope(supabase.from('sales').select('id,total_sales_value,gross_commission,created_at,status')).gte('created_at',from.toISOString()).lte('created_at',now.toISOString()).order('created_at',{ascending:false}).limit(1000)
+   scope(supabase.from('sales').select('id,total_sales_value,gross_commission,created_at,status')).gte('created_at',from.toISOString()).lte('created_at',now.toISOString()).order('created_at',{ascending:false}).limit(1000),
+   scope(supabase.from('sales').select('id,total_sales_value,created_at')).gte('created_at',weekStart.toISOString()).lte('created_at',now.toISOString()).order('created_at',{ascending:false}).limit(1000)
   ])
   if(!live)return
-  const err=employees.error||teams.error||products.error||sales.error
+  const err=employees.error||teams.error||products.error||sales.error||weeklySales.error
   if(err){setError(err.message);setLoading(false);return}
-  const rows=sales.data||[],approved=rows.filter(r=>r.status==='approved'),pending=rows.filter(r=>['pending','submitted','under_review'].includes(r.status))
-  const week=Array.from({length:7},(_,i)=>{const d=new Date();d.setDate(d.getDate()-(6-i));d.setHours(0,0,0,0);const next=new Date(d);next.setDate(next.getDate()+1);const dayRows=rows.filter(r=>r.created_at&&new Date(r.created_at)>=d&&new Date(r.created_at)<next);return {label:d.toLocaleDateString(undefined,{weekday:'short'}),sales:dayRows.reduce((n,r)=>n+Number(r.total_sales_value||0),0),count:dayRows.length}})
+  const rows=sales.data||[],weekRows=weeklySales.data||[],approved=rows.filter(r=>r.status==='approved'),pending=rows.filter(r=>['pending','submitted','under_review'].includes(r.status))
+  const week=Array.from({length:7},(_,i)=>{const d=new Date();d.setDate(d.getDate()-(6-i));d.setHours(0,0,0,0);const next=new Date(d);next.setDate(next.getDate()+1);const dayRows=weekRows.filter(r=>r.created_at&&new Date(r.created_at)>=d&&new Date(r.created_at)<next);return {label:d.toLocaleDateString(undefined,{weekday:'short'}),sales:dayRows.reduce((n,r)=>n+Number(r.total_sales_value||0),0),count:dayRows.length}})
   setStats({employees:employees.count||0,teams:teams.count||0,products:products.count||0,sales:rows.reduce((n,r)=>n+Number(r.total_sales_value||0),0),commission:rows.reduce((n,r)=>n+Number(r.gross_commission||0),0),saleCount:rows.length,approved:approved.length,pending:pending.length,paid:rows.filter(r=>r.status==='paid').length,week});setLoading(false)
  }catch(e){if(live){setError(e.message||'Dashboard መረጃ ማምጣት አልተቻለም።');setLoading(false)}}})()
  return()=>{live=false}
