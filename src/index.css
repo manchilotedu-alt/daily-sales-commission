@@ -221,3 +221,68 @@ main.workspace-main button.btn-secondary {
   color: #16466b !important;
   border: 1px solid #8fb8e2 !important;
 }
+
+
+/* FIX: target the actual .workspace-main class regardless of element nesting.
+   Apply a visibly different interior palette to all routed pages, not just the sidebar. */
+.workspace-main {
+  background: linear-gradient(135deg, #dceafe 0%, #e8f7f2 48%, #f2eaff 100%) !important;
+  color: #172b4d !important;
+}
+.workspace-main h1, .workspace-main h2, .workspace-main h3, .workspace-main h4 {
+  color: #12345b;
+}
+.workspace-main .rounded-2xl,
+.workspace-main .rounded-xl {
+  border-color: #a8c7e8;
+}
+.workspace-main .rounded-2xl.border,
+.workspace-main .rounded-xl.border,
+.workspace-main .overflow-x-auto.rounded-2xl,
+.workspace-main form.rounded-2xl {
+  background-color: #ffffff !important;
+  border-color: #a8c7e8 !important;
+  box-shadow: 0 8px 24px rgba(26, 64, 112, .13) !important;
+}
+.workspace-main .bg-white,
+.workspace-main .dark\:bg-zinc-900,
+.workspace-main .dark\:bg-zinc-800 {
+  background-color: #ffffff !important;
+}
+.workspace-main table thead,
+.workspace-main table thead tr,
+.workspace-main table thead th {
+  background: #c7e3ff !important;
+  color: #103b68 !important;
+  border-color: #7eaddd !important;
+}
+.workspace-main table tbody tr:nth-child(even) {
+  background-color: #edf6ff !important;
+}
+.workspace-main table tbody tr:hover {
+  background-color: #c9f3e5 !important;
+}
+.workspace-main input:not([type="checkbox"]),
+.workspace-main select,
+.workspace-main textarea,
+.workspace-main .input {
+  background-color: #f0f7ff !important;
+  border-color: #8fb8e2 !important;
+  color: #17385d !important;
+}
+.workspace-main button.btn {
+  background: linear-gradient(135deg, #087f5b, #087f8c) !important;
+  color: #fff !important;
+  border-color: #05634b !important;
+}
+.workspace-main button.btn-secondary {
+  background: #d8eaff !important;
+  color: #16466b !important;
+  border-color: #8fb8e2 !important;
+}
+/* Distinct KPI/status accents remain visible inside dashboard cards. */
+.workspace-main .bg-emerald-50 { background-color: #c8f4e2 !important; }
+.workspace-main .bg-blue-50 { background-color: #d7eaff !important; }
+.workspace-main .bg-violet-50 { background-color: #e9ddff !important; }
+.workspace-main .bg-amber-50 { background-color: #ffedbd !important; }
+.workspace-main .bg-rose-50 { background-color: #ffe0e6 !important; }
