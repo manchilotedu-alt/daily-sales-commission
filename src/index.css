@@ -239,3 +239,77 @@
   .workspace-main table { min-width: 560px; }
   .workspace-main button.btn { min-height: 42px; }
 }
+
+
+/* App shell: enforce the dark canvas beyond the inner page container */
+.app-shell {
+  min-height: 100vh;
+  color: #e6edf7;
+  background-color: #090d14;
+  background-image:
+    radial-gradient(ellipse 55rem 38rem at 0% 5%, rgba(37, 99, 235, .19), transparent 67%),
+    radial-gradient(ellipse 48rem 34rem at 100% 12%, rgba(234, 88, 12, .14), transparent 68%),
+    linear-gradient(145deg, #080c12 0%, #0b111b 48%, #0a0d13 100%);
+  background-attachment: fixed;
+}
+.app-shell header {
+  background-color: rgba(11, 17, 27, .92);
+  border-color: rgba(255, 255, 255, .10);
+  color: #e6edf7;
+}
+.app-shell .bg-white,
+.app-shell .bg-slate-50,
+.app-shell .bg-gray-50,
+.app-shell .bg-zinc-50,
+.app-shell .bg-slate-100,
+.app-shell .bg-gray-100,
+.app-shell .bg-zinc-100 {
+  background-color: #111927;
+  color: #e6edf7;
+}
+.app-shell .border-slate-200,
+.app-shell .border-slate-200\/80,
+.app-shell .border-slate-100,
+.app-shell .border-gray-200 {
+  border-color: #29374b;
+}
+.app-shell .text-slate-900,
+.app-shell .text-slate-800,
+.app-shell .text-slate-700,
+.app-shell .text-gray-900,
+.app-shell .text-gray-800 {
+  color: #e6edf7;
+}
+.app-shell .text-slate-600,
+.app-shell .text-slate-500,
+.app-shell .text-slate-400,
+.app-shell .text-gray-600,
+.app-shell .text-gray-500 {
+  color: #9aa9bd;
+}
+.app-shell .hover\\:bg-slate-50:hover,
+.app-shell .hover\\:bg-slate-100:hover {
+  background-color: #1a2638;
+}
+.app-shell main.workspace-main {
+  background: transparent;
+}
+.app-shell .bg-slate-100.dark\\:bg-zinc-800,
+.app-shell .dark\\:bg-zinc-800 {
+  background-color: #172235;
+}
+.app-shell .bg-emerald-50.text-emerald-700 { background-color: rgba(16, 185, 129, .15); color: #6ee7b7; }
+.app-shell .bg-blue-50.text-blue-700 { background-color: rgba(59, 130, 246, .16); color: #93c5fd; }
+.app-shell .bg-violet-50.text-violet-700 { background-color: rgba(139, 92, 246, .16); color: #c4b5fd; }
+.app-shell .bg-amber-50.text-amber-700 { background-color: rgba(245, 158, 11, .16); color: #fcd34d; }
+.app-shell .bg-rose-50 { background-color: rgba(244, 63, 94, .14); color: #fda4af; }
+
+/* Consistent accent identity: sales blue, commission violet, workforce indigo, products cyan */
+.workspace-main .metric-sales { border-top: 2px solid #38bdf8; }
+.workspace-main .metric-commission { border-top: 2px solid #a78bfa; }
+.workspace-main .metric-workforce { border-top: 2px solid #818cf8; }
+.workspace-main .metric-products { border-top: 2px solid #22d3ee; }
+
+@media (max-width: 767px) {
+  .app-shell { background-attachment: scroll; }
+}
