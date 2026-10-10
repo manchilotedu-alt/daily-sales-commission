@@ -168,3 +168,56 @@
 .workspace-main .bg-blue-50.text-blue-700 { background-color: #d7eaff !important; color: #1459a6 !important; }
 .workspace-main .bg-violet-50.text-violet-700 { background-color: #e9ddff !important; color: #6335a5 !important; }
 .workspace-main .bg-amber-50.text-amber-700 { background-color: #ffedbd !important; color: #975b00 !important; }
+
+
+/* Dirsha high-contrast redesign: intentionally strong visible colors across every workspace page. */
+main.workspace-main {
+  background: linear-gradient(135deg, #dceafe 0%, #e8f7f2 48%, #f2eaff 100%) !important;
+  color: #172b4d !important;
+}
+main.workspace-main section > div.rounded-2xl,
+main.workspace-main section > form.rounded-2xl,
+main.workspace-main section > div.overflow-x-auto,
+main.workspace-main section div.rounded-2xl.border,
+main.workspace-main section div.overflow-x-auto.rounded-2xl {
+  border: 1px solid #a8c7e8 !important;
+  background: #ffffff !important;
+  box-shadow: 0 8px 24px rgba(26, 64, 112, .13) !important;
+}
+main.workspace-main section > div:first-child h2,
+main.workspace-main section h3 {
+  color: #12345b !important;
+}
+main.workspace-main table thead,
+main.workspace-main table thead tr {
+  background: #c7e3ff !important;
+}
+main.workspace-main table thead th {
+  background: #c7e3ff !important;
+  color: #103b68 !important;
+  border-bottom: 2px solid #7eaddd !important;
+}
+main.workspace-main table tbody tr:nth-child(even) {
+  background: #edf6ff !important;
+}
+main.workspace-main table tbody tr:hover {
+  background: #c9f3e5 !important;
+}
+main.workspace-main input:not([type="checkbox"]),
+main.workspace-main select,
+main.workspace-main textarea {
+  background: #f0f7ff !important;
+  border: 1px solid #8fb8e2 !important;
+  color: #17385d !important;
+}
+main.workspace-main button.btn {
+  background: linear-gradient(135deg, #087f5b, #087f8c) !important;
+  color: #fff !important;
+  border: 1px solid #05634b !important;
+  box-shadow: 0 4px 12px rgba(8, 127, 91, .22) !important;
+}
+main.workspace-main button.btn-secondary {
+  background: #d8eaff !important;
+  color: #16466b !important;
+  border: 1px solid #8fb8e2 !important;
+}
