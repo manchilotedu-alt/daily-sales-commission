@@ -195,7 +195,8 @@ function Dashboard({user,global,branchAdmin,setPage,items=[]}){
  }catch(e){if(live){setError(e.message||'Dashboard መረጃ ማምጣት አልተቻለም።');setLoading(false)}}})()
  return()=>{live=false}
  },[user?.organization_id,user?.branch_id,branchAdmin,period,selectedDate,branchTrendPeriod])
- const money=v=>Number(v||0).toLocaleString(undefined,{maximumFractionDigits:2}) const maxBar=Math.max(1,...stats.week.map(d=>d.sales))
+ const money=v=>Number(v||0).toLocaleString(undefined,{maximumFractionDigits:2})
+ const maxBar=Math.max(1,...stats.week.map(d=>d.sales))
  const cards=[
   {label:'ጠቅላላ ሽያጭ',value:money(stats.sales)+' ብር',hint:stats.saleCount+' ሽያጮች',icon:'↗',tone:'blue'},
   {label:'ጠቅላላ ኮሚሽን',value:money(stats.commission)+' ብር',hint:'በተመረጠው ጊዜ',icon:'◈',tone:'violet'},
