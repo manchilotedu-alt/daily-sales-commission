@@ -47,5 +47,62 @@ Deno.serve(async req=>{if(req.method==='OPTIONS')return new Response('ok',{heade
   await db.from('audit_logs').insert({organization_id:e.organization_id,branch_id:e.branch_id,actor_id:me.id,action:'attendance_recorded',entity_type:'attendance',entity_id:x.id,after_data:{employee_id:e.id,work_date:date,status:s}})
   return out({ok:true,attendance_id:x.id})
  }
+ if(a==='sync_team_attendance'){
+  const date=String(b.work_date||today())
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||Number.isNaN(Date.parse(date)))return out({error:'Invalid attendance date'},400)
+  let teamQuery=db.from('teams').select('id').eq('organization_id',me.organization_id).eq('branch_id',me.branch_id).eq('status','active')
+  if(globalRole(me.role)&&b.organization_id)teamQuery=teamQuery.eq('organization_id',b.organization_id)
+  if(globalRole(me.role)&&b.branch_id)teamQuery=teamQuery.eq('branch_id',b.branch_id)
+  const {data:teams,error:teamsError}=await teamQuery
+  if(teamsError)throw teamsError
+  const teamIds=(teams||[]).map((x:any)=>x.id)
+  if(!teamIds.length)return out({error:'No active teams exist for this branch; attendance was not changed'},409)
+  const {data:people,error:peopleError}=await db.from('profiles')
+   .select('id,role,active,employee_status,status_effective_date,organization_id,branch_id')
+   .eq('organization_id',me.organization_id).eq('branch_id',me.branch_id).eq('active',true)
+   .in('role',['lead','lead_sales','assistant','driver'])
+  if(peopleError)throw peopleError
+  const staff=people||[]
+  if(!staff.length)return out({ok:true,work_date:date,created:0,message:'No active sales staff or drivers found'})
+  const ids=staff.map((x:any)=>x.id)
+  const {data:assignments,error:assignError}=await db.from('team_assignments')
+   .select('id,team_id,employee_id,team_role,employee_position,effective_from,effective_to,created_at')
+   .in('team_id',teamIds).lte('effective_from',date).or(`effective_to.is.null,effective_to.gte.${date}`)
+   .order('created_at',{ascending:false})
+  if(assignError)throw assignError
+  const currentByPosition=new Map<string,any>()
+  for(const x of assignments||[]){
+   const k=`${x.team_id}:${x.team_role}:${Number(x.employee_position||1)}`
+   if(!currentByPosition.has(k))currentByPosition.set(k,x)
+  }
+  const assignedIds=new Set([...currentByPosition.values()].map((x:any)=>x.employee_id))
+  const {data:workRows,error:workError}=await db.from('daily_work_status').select('employee_id,work_status').in('employee_id',ids).eq('work_date',date)
+  if(workError)throw workError
+  const workMap=new Map((workRows||[]).map((x:any)=>[x.employee_id,x.work_status]))
+  const {data:existing,error:existingError}=await db.from('attendance').select('employee_id,attendance_status').in('employee_id',ids).eq('work_date',date)
+  if(existingError)throw existingError
+  const existingMap=new Map((existing||[]).map((x:any)=>[x.employee_id,x.attendance_status]))
+  const rows:any[]=[]
+  let skippedRest=0,keptExisting=0
+  for(const person of staff){
+   if(date>=String(person.status_effective_date||date)&&!['active','promoted'].includes(person.employee_status||'active'))continue
+   const ws=workMap.get(person.id)
+   if(ws==='rest_day'){skippedRest++;continue}
+   if(existingMap.has(person.id)){keptExisting++;continue}
+   let status='absent'
+   if(ws==='leave')status='leave'
+   else if(ws==='official_duty')status='official_duty'
+   else status=assignedIds.has(person.id)?'present':'absent'
+   rows.push({employee_id:person.id,work_date:date,attendance_status:status,recorded_by:me.id})
+  }
+  if(rows.length){
+   const {error:insertError}=await db.from('attendance').upsert(rows,{onConflict:'employee_id,work_date',ignoreDuplicates:true})
+   if(insertError)throw insertError
+  }
+  const count=(status:string,role:string)=>rows.filter((x:any)=>x.attendance_status===status&&staff.find((p:any)=>p.id===x.employee_id)?.role===role).length
+  const summary={sales_present:count('present','lead')+count('present','lead_sales')+count('present','assistant'),sales_absent:count('absent','lead')+count('absent','lead_sales')+count('absent','assistant'),drivers_present:count('present','driver'),drivers_absent:count('absent','driver'),leave:rows.filter((x:any)=>x.attendance_status==='leave').length,official_duty:rows.filter((x:any)=>x.attendance_status==='official_duty').length,skipped_rest_days:skippedRest,kept_existing:keptExisting,created:rows.length}
+  await db.from('audit_logs').insert({organization_id:me.organization_id,branch_id:me.branch_id,actor_id:me.id,action:'team_roster_attendance_synced',entity_type:'attendance',after_data:{work_date:date,...summary}})
+  return out({ok:true,work_date:date,...summary})
+ }
  return out({error:'Unknown action'},400)
 }catch(e){return out({error:e?.message||'Unexpected error'},500)}})
