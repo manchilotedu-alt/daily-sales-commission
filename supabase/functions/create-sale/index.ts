@@ -94,27 +94,52 @@ Deno.serve(async req=>{
    }
   }
 
-  // Resolve price at sale time. A variant price wins; otherwise product price version; legacy rate is final fallback.
+  // Resolve prices in batches so large sales do not issue one database request per item.
+  // Chunk IDs to keep PostgREST URLs and response sizes manageable.
+  const chunks=<T>(values:T[],size=100):T[][]=>{
+   const result:T[][]=[]
+   for(let i=0;i<values.length;i+=size)result.push(values.slice(i,i+size))
+   return result
+  }
+  const basePriceRows:any[]=[]
+  for(const group of chunks(ids)){
+   const {data,error}=await admin.from('product_price_versions')
+    .select('id,price,product_id,product_variant_id,variant_id,effective_from')
+    .eq('organization_id',org).in('product_id',group).is('product_variant_id',null).is('variant_id',null)
+    .eq('status','active').lte('effective_from',saleDate)
+    .or(`effective_to.is.null,effective_to.gte.${saleDate}`)
+    .order('effective_from',{ascending:false})
+   if(error)throw error
+   basePriceRows.push(...(data||[]))
+  }
+  const variantIds=[...new Set(requestedItems.filter(x=>x.product_variant_id).map(x=>x.product_variant_id as string))]
+  const variantPriceRows:any[]=[]
+  for(const group of chunks(variantIds)){
+   const {data,error}=await admin.from('product_price_versions')
+    .select('id,price,product_id,product_variant_id,effective_from')
+    .eq('organization_id',org).in('product_variant_id',group).eq('status','active')
+    .lte('effective_from',saleDate)
+    .or(`effective_to.is.null,effective_to.gte.${saleDate}`)
+    .order('effective_from',{ascending:false})
+   if(error)throw error
+   variantPriceRows.push(...(data||[]))
+  }
+  const latestByKey=(rows:any[],keyOf:(row:any)=>string)=>{
+   const map=new Map<string,any>()
+   for(const row of rows){
+    const key=keyOf(row),existing=map.get(key)
+    if(!existing||String(row.effective_from)>String(existing.effective_from))map.set(key,row)
+   }
+   return map
+  }
+  const basePriceByProduct=latestByKey(basePriceRows,(r:any)=>String(r.product_id))
+  const variantPriceById=latestByKey(variantPriceRows,(r:any)=>String(r.product_variant_id))
   const clean:any[]=[]
   for(const x of requestedItems){
    const p=products.find(p=>Number(p.id)===x.product_id)
-   let priceRow:any=null
-   const q=admin.from('product_price_versions').select('id,price,product_id,product_variant_id,variant_id')
-    .eq('organization_id',org).eq('product_id',x.product_id).is('product_variant_id',null).is('variant_id',null).eq('status','active')
-    .lte('effective_from',saleDate).or(`effective_to.is.null,effective_to.gte.${saleDate}`)
-    .order('effective_from',{ascending:false}).limit(1)
-   const {data,error}=await q
-   if(error)throw error
-   if(data?.length)priceRow=data[0]
-   if(x.product_variant_id){
-    const {data:vd,error:ve}=await admin.from('product_price_versions').select('id,price')
-     .eq('organization_id',org).eq('product_id',x.product_id).eq('product_variant_id',x.product_variant_id)
-     .eq('status','active').lte('effective_from',saleDate)
-     .or(`effective_to.is.null,effective_to.gte.${saleDate}`)
-     .order('effective_from',{ascending:false}).limit(1)
-    if(ve)throw ve
-    if(vd?.length)priceRow=vd[0]
-   }
+   const priceRow=(x.product_variant_id?variantPriceById.get(String(x.product_variant_id)):null)
+    ||basePriceByProduct.get(String(x.product_id))
+    ||null
    const rate=Number(priceRow?.price ?? p.rate ?? 0)
    if(!Number.isFinite(rate)||rate<0)return out({error:'Invalid product price'},409)
    clean.push({product_id:x.product_id,product_variant_id:x.product_variant_id,qty:x.qty,rate,line_amt:money(x.qty*rate),price_version_id:priceRow?.id||null})
@@ -273,8 +298,12 @@ Deno.serve(async req=>{
    qty:x.qty,rate:x.rate,line_amt:x.line_amt,unit_price_snapshot:x.rate,sales_value:x.line_amt,
    commission_rule_version_id:x.commission_rule_version_id,commission_amount:x.commission_amount
   }))
-  const {error:ie}=await admin.from('sale_items').insert(rows)
-  if(ie){await admin.from('sales').delete().eq('id',sale.id);throw ie}
+  let itemInsertError:any=null
+  for(const batch of chunks(rows,100)){
+   const {error}=await admin.from('sale_items').insert(batch)
+   if(error){itemInsertError=error;break}
+  }
+  if(itemInsertError){await admin.from('sales').delete().eq('id',sale.id);throw itemInsertError}
 
   if(allocations.length){
    const allocationRows=allocations.map(x=>({...x,sale_id:sale.id}))
