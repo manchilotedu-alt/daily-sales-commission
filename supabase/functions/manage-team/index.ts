@@ -134,10 +134,6 @@ Deno.serve(async req=>{
    if(le)throw le
    if(latest?.status==='approved'&&!body.confirm_change)return out({error:'This structure already has a saved approved split. Set confirm_change=true only when intentionally changing it.'},409)
    const version=Number(latest?.version||0)+1
-   if(latest?.status==='approved'){
-    const {error:closeErr}=await db.from('team_split_versions').update({effective_to:priorDate(start)}).eq('id',latest.id).is('effective_to',null)
-    if(closeErr)throw closeErr
-   }
    const {data:sv,error:sve}=await db.from('team_split_versions').insert({team_structure_id:structure.id,version,status:'pending',effective_from:start,submitted_by:me.id,submitted_at:new Date().toISOString()}).select('id').single()
    if(sve)throw sve
    const rows=lines.map((l:any)=>({team_split_version_id:sv.id,...l}))
@@ -158,6 +154,13 @@ Deno.serve(async req=>{
     if(le)throw le
     const sum=Math.round((lines||[]).reduce((n:number,l:any)=>n+Number(l.percentage||0),0)*10000)/10000
     if(Math.abs(sum-100)>0.0001)return out({error:'Split lines must total 100% before approval'},409)
+    const {data:previous,error:previousError}=await db.from('team_split_versions').select('id,effective_from').eq('team_structure_id',s.team_structure_id).eq('status','approved').is('effective_to',null).neq('id',s.id)
+    if(previousError)throw previousError
+    for(const old of previous||[]){
+     const end=old.effective_from===s.effective_from?s.effective_from:priorDate(s.effective_from)
+     const {error:closeError}=await db.from('team_split_versions').update({effective_to:end}).eq('id',old.id)
+     if(closeError)throw closeError
+    }
    }
    const update=decision==='approve'?{status:'approved',approved_by:me.id,approved_at:new Date().toISOString()}:{status:'returned',returned_reason:'Super Admin returned the split',approved_by:me.id,approved_at:new Date().toISOString()}
    const {error}=await db.from('team_split_versions').update(update).eq('id',s.id).eq('status','pending')
