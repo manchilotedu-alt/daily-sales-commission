@@ -21,13 +21,16 @@ Deno.serve(async req=>{
    .select('id,role,active,organization_id,branch_id').eq('id',caller.id).single()
   if(ce||!cp?.active)return out({error:'Forbidden'},403)
 
-  const allowed=['super_admin','admin','branch_admin','lead','lead_sales','assistant']
+  const allowed=['branch_admin']
   if(!allowed.includes(cp.role))return out({error:'This role cannot submit sales'},403)
 
   const body=await req.json()
   const org=cp.organization_id
   const branch=cp.branch_id||null
   if(!org||!Array.isArray(body.items)||!body.items.length)return out({error:'Sale data is incomplete'},400)
+  const receiptReference=String(body.receipt_reference||'').trim()
+  if(!receiptReference||receiptReference.length>120)return out({error:'Receipt/reference number is required (maximum 120 characters)'},400)
+  if(!body.team_id)return out({error:'Select the sales team for this sale'},400)
 
   const saleDate=String(body.sale_date||'')
   if(!dateOk(saleDate))return out({error:'Invalid sale date'},400)
@@ -163,61 +166,81 @@ Deno.serve(async req=>{
    grossCommission=money(grossCommission+line.commission_amount)
   }
 
-  // Validate and snapshot participants.
-  const participants=[['lead_id',body.lead_id,'lead'],['assistant_id',body.assistant_id,'assistant'],['driver_id',body.driver_id,'driver']].filter(x=>x[1])
-  const pids=[...new Set(participants.map(x=>String(x[1])))]
-  let people:any[]=[]
-  if(pids.length){
-   const {data,error}=await admin.from('profiles').select('id,role,active,organization_id,branch_id').in('id',pids)
-   if(error)throw error
-   people=data||[]
-   if(people.length!==pids.length)return out({error:'Invalid staff member'},400)
-   for(const [field,id,role] of participants){
-    const p=people.find(x=>String(x.id)===String(id))
-    if(!p?.active||p.organization_id!==org||p.branch_id!==branch||!((role==='lead'&&['lead','lead_sales'].includes(p.role))||p.role===role))
-     return out({error:'Invalid staff assignment'},400)
+  // Resolve the roster and approved split from the selected team's effective-dated history.
+  const {data:team,error:teamError}=await admin.from('teams')
+   .select('id,organization_id,branch_id,status').eq('id',body.team_id).single()
+  if(teamError||!team)return out({error:'Sales team was not found'},404)
+  if(team.organization_id!==org||team.branch_id!==branch)return out({error:'Sales team is outside this branch'},403)
+  const {data:assignmentRows,error:assignmentError}=await admin.from('team_assignments')
+   .select('id,employee_id,team_role,employee_position,effective_from,effective_to,created_at')
+   .eq('team_id',team.id).lte('effective_from',saleDate)
+   .or(`effective_to.is.null,effective_to.gte.${saleDate}`).order('created_at',{ascending:false})
+  if(assignmentError)throw assignmentError
+  const latestByPosition=new Map<string,any>()
+  for(const row of assignmentRows||[]){
+   const key=`${row.team_role}:${Number(row.employee_position||1)}`
+   if(!latestByPosition.has(key))latestByPosition.set(key,row)
+  }
+  const {data:structureRows,error:structureError}=await admin.from('team_structures')
+   .select('id,version,status,effective_from,effective_to,team_structure_roles(role_code,required_count)')
+   .eq('team_id',team.id).lte('effective_from',saleDate)
+   .or(`effective_to.is.null,effective_to.gte.${saleDate}`).order('effective_from',{ascending:false}).limit(1)
+  if(structureError)throw structureError
+  const structure=structureRows?.[0]
+  if(!structure)return out({error:'No team structure is configured for this sale date'},409)
+  const roleCounts=(structure.team_structure_roles||[]).reduce((acc:any,r:any)=>({...acc,[r.role_code]:Number(r.required_count)}),{})
+  const recipients:any[]=[]
+  for(const role of ['lead','assistant','driver']){
+   const count=Number(roleCounts[role]||0)
+   for(let position=1;position<=count;position++){
+    const assignment=latestByPosition.get(`${role}:${position}`)
+    if(!assignment)return out({error:`Team roster is incomplete for ${role} position ${position} on ${saleDate}`},409)
+    recipients.push({id:assignment.employee_id,role,position,assignment_id:assignment.id})
    }
   }
-
-  if(settings?.multiple_lead_policy==='single_lead' && body.lead_id && body.second_lead_id)
-   return out({error:'This organization allows only one lead per sale'},409)
+  if(recipients.filter((x:any)=>x.role==='lead').length!==1||recipients.filter((x:any)=>x.role==='driver').length!==1)
+   return out({error:'The team must have one leader and one driver'},409)
+  const pids=[...new Set(recipients.map((x:any)=>String(x.id)))]
+  const {data:people,error:peopleError}=await admin.from('profiles').select('id,active,organization_id,branch_id').in('id',pids)
+  if(peopleError)throw peopleError
+  if((people||[]).length!==pids.length)return out({error:'A team member no longer exists'},409)
+  for(const person of people||[]){
+   if(!person.active||person.organization_id!==org||person.branch_id!==branch)
+    return out({error:'A team member is inactive or outside this branch'},409)
+  }
+  const {data:splitRows,error:splitError}=await admin.from('team_split_versions')
+   .select('id,version,status,team_structure_id,effective_from,effective_to,team_split_lines(role_code,employee_position,percentage,residual_eligible)')
+   .eq('team_structure_id',structure.id).eq('status','approved').lte('effective_from',saleDate)
+   .or(`effective_to.is.null,effective_to.gte.${saleDate}`).order('effective_from',{ascending:false}).limit(1)
+  if(splitError)throw splitError
+  const splitVersion=splitRows?.[0]||null
+  if(!splitVersion)return out({error:'No approved commission split exists for this team structure and sale date'},409)
+  const splitLines:any[]=splitVersion.team_split_lines||[]
+  const splitSum=money(splitLines.reduce((n:number,x:any)=>n+Number(x.percentage||0),0))
+  if(splitSum!==100)return out({error:'Approved team split must total 100%'},409)
+  const expectedKeys=recipients.map((x:any)=>`${x.role}:${x.position}`).sort()
+  const configuredKeys=splitLines.map((x:any)=>`${x.role_code}:${Number(x.employee_position)}`).sort()
+  if(JSON.stringify(expectedKeys)!==JSON.stringify(configuredKeys))
+   return out({error:'Approved split does not match the team structure positions'},409)
 
   const totalQuantity=clean.reduce((n,x)=>n+x.qty,0)
   const totalSalesValue=money(clean.reduce((n,x)=>n+x.line_amt,0))
 
-  // Prefer an approved versioned team split. Legacy split_settings is only a compatibility fallback.
-  let splitVersion:any=null
-  if(body.team_split_version_id){
-   const {data,error}=await admin.from('team_split_versions')
-    .select('id,status,version,team_structure_id').eq('id',body.team_split_version_id).single()
-   if(error)throw error
-   if(data?.status!=='approved')return out({error:'Team split is not approved'},409)
-   splitVersion=data
+  const allocations:any[]=[]
+  let allocated=0
+  for(const r of recipients){
+   const line=splitLines.find((x:any)=>x.role_code===r.role&&Number(x.employee_position)===r.position)
+   if(!line)continue
+   const amount=money(grossCommission*Number(line.percentage)/100)
+   allocations.push({employee_id:r.id,role_code:r.role,team_assignment_id:r.assignment_id,team_split_version_id:splitVersion.id,split_percentage:Number(line.percentage),allocated_commission:amount})
+   allocated=money(allocated+amount)
   }
-  let splitLines:any[]=[]
-  if(splitVersion){
-   const {data,error}=await admin.from('team_split_lines').select('role_code,employee_position,percentage,residual_eligible').eq('team_split_version_id',splitVersion.id)
-   if(error)throw error
-   splitLines=data||[]
-  }else{
-   const {data,error}=await admin.from('split_settings').select('lead_pct,assistant_pct,driver_pct').order('updated_at',{ascending:false}).limit(1).maybeSingle()
-   if(error)throw error
-   if(data){
-    splitLines=[
-     {role_code:'lead',employee_position:1,percentage:Number(data.lead_pct||0),residual_eligible:true},
-     {role_code:'assistant',employee_position:1,percentage:Number(data.assistant_pct||0),residual_eligible:false},
-     {role_code:'driver',employee_position:1,percentage:Number(data.driver_pct||0),residual_eligible:false}
-    ]
-   }
+  const residual=money(grossCommission-allocated)
+  if(Math.abs(residual)>0){
+   const target=allocations.find((x:any)=>splitLines.find((l:any)=>l.role_code===x.role_code&&Number(l.employee_position)===Number(recipients.find((r:any)=>r.id===x.employee_id&&r.role===x.role_code)?.position))?.residual_eligible)
+   if(!target)return out({error:'Commission split leaves a remainder but no residual recipient is configured'},409)
+   target.allocated_commission=money(target.allocated_commission+residual)
   }
-  const splitSum=money(splitLines.reduce((n,x)=>n+Number(x.percentage||0),0))
-  if(splitSum!==100)return out({error:'Approved team split must total 100%'},409)
-
-  const recipients=[
-   {id:body.lead_id,role:'lead',position:1},
-   {id:body.assistant_id,role:'assistant',position:1},
-   {id:body.driver_id,role:'driver',position:1}
-  ].filter(x=>x.id)
 
   const allocations:any[]=[]
   let allocated=0
@@ -235,15 +258,19 @@ Deno.serve(async req=>{
    target.allocated_commission=money(target.allocated_commission+residual)
   }
 
-  const leadAmt=money(allocations.find(x=>x.role_code==='lead')?.allocated_commission||0)
-  const assistantAmt=money(allocations.find(x=>x.role_code==='assistant')?.allocated_commission||0)
-  const driverAmt=money(allocations.find(x=>x.role_code==='driver')?.allocated_commission||0)
+  const leadAmt=money(allocations.filter(x=>x.role_code==='lead').reduce((n,x)=>n+x.allocated_commission,0))
+  const assistantAmt=money(allocations.filter(x=>x.role_code==='assistant').reduce((n,x)=>n+x.allocated_commission,0))
+  const driverAmt=money(allocations.filter(x=>x.role_code==='driver').reduce((n,x)=>n+x.allocated_commission,0))
+  const leadRecipient=recipients.find((x:any)=>x.role==='lead')
+  const assistantRecipient=recipients.find((x:any)=>x.role==='assistant')
+  const driverRecipient=recipients.find((x:any)=>x.role==='driver')
 
   const salePayload:any={
-   sale_date:saleDate,lead_id:body.lead_id||null,assistant_id:body.assistant_id||null,driver_id:body.driver_id||null,
-   submitted_by:caller.id,entered_by:caller.id,team_id:body.team_id||null,lead_employee_id:body.lead_id||null,
+   sale_date:saleDate,lead_id:leadRecipient?.id||null,assistant_id:assistantRecipient?.id||null,driver_id:driverRecipient?.id||null,
+   submitted_by:caller.id,entered_by:caller.id,team_id:team.id,lead_employee_id:leadRecipient?.id||null,
+   receipt_reference:receiptReference,
    sales_source_policy_version_id:body.sales_source_policy_version_id||null,
-   team_structure_version_id:body.team_structure_version_id||null,team_split_version_id:splitVersion?.id||null,
+   team_structure_version_id:structure.id,team_split_version_id:splitVersion.id,
    total:totalSalesValue,total_quantity:totalQuantity,total_sales_value:totalSalesValue,gross_commission:grossCommission,
    lead_amt:leadAmt,assistant_amt:assistantAmt,driver_amt:driverAmt,status:'pending',
    organization_id:org,branch_id:branch
