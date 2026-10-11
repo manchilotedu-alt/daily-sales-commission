@@ -56,6 +56,7 @@ Deno.serve(async req=>{
    if(!global&&(team.organization_id!==me.organization_id||team.branch_id!==me.branch_id))return out({error:'Team is outside your branch'},403)
    const start=String(body.effective_from||today())
    if(!validDate(start))return out({error:'Invalid effective date'},400)
+   if(start<today())return out({error:'Past effective dates are blocked to preserve historical team records'},409)
    const raw=Array.isArray(body.assignments)?body.assignments:[]
    const assignments=raw.map((a:any)=>({employee_id:String(a.employee_id||''),team_role:String(a.team_role||''),employee_position:Number(a.employee_position||1)}))
    if(assignments.some((a:any)=>!a.employee_id||!['lead','assistant','driver'].includes(a.team_role)||!Number.isInteger(a.employee_position)||a.employee_position<1))return out({error:'Invalid assignment data'},400)
@@ -126,6 +127,7 @@ Deno.serve(async req=>{
    if(team.organization_id!==me.organization_id||team.branch_id!==me.branch_id)return out({error:'Team is outside your branch'},403)
    const start=String(body.effective_from||today())
    if(!validDate(start))return out({error:'Invalid effective date'},400)
+   if(start<today())return out({error:'Past effective dates are blocked to preserve historical team records'},409)
    const {data:structure,error:se}=await db.from('team_structures').select('id,version,team_structure_roles(role_code,required_count)').eq('team_id',team.id).eq('status','active').lte('effective_from',start).or(`effective_to.is.null,effective_to.gte.${start}`).order('version',{ascending:false}).limit(1).maybeSingle()
    if(se)throw se
    if(!structure)return out({error:'Save the team roster before configuring its split'},409)
