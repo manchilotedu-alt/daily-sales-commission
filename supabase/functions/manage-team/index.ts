@@ -141,6 +141,7 @@ Deno.serve(async req=>{
    if(Math.abs(sum-100)>0.0001)return out({error:'Split must total exactly 100%'},400)
    const {data:latest,error:le}=await db.from('team_split_versions').select('id,version,status,effective_from').eq('team_structure_id',structure.id).order('version',{ascending:false}).limit(1).maybeSingle()
    if(le)throw le
+   if(latest?.status==='pending')return out({error:'A split version is already awaiting review for this structure'},409)
    if(latest?.status==='approved'&&!body.confirm_change)return out({error:'This structure already has a saved approved split. Set confirm_change=true only when intentionally changing it.'},409)
    const version=Number(latest?.version||0)+1
    const {data:sv,error:sve}=await db.from('team_split_versions').insert({team_structure_id:structure.id,version,status:'pending',effective_from:start,submitted_by:me.id,submitted_at:new Date().toISOString()}).select('id').single()
@@ -163,7 +164,7 @@ Deno.serve(async req=>{
     if(le)throw le
     const sum=Math.round((lines||[]).reduce((n:number,l:any)=>n+Number(l.percentage||0),0)*10000)/10000
     if(Math.abs(sum-100)>0.0001)return out({error:'Split lines must total 100% before approval'},409)
-    const {data:previous,error:previousError}=await db.from('team_split_versions').select('id,effective_from').eq('team_structure_id',s.team_structure_id).eq('status','approved').is('effective_to',null).neq('id',s.id)
+    const {data:previous,error:previousError}=await db.from('team_split_versions').select('id,effective_from').eq('team_structure_id',s.team_structure_id).eq('status','approved').is('effective_to',null).lte('effective_from',s.effective_from).neq('id',s.id)
     if(previousError)throw previousError
     for(const old of previous||[]){
      const end=old.effective_from===s.effective_from?s.effective_from:priorDate(s.effective_from)
