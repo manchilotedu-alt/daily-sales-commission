@@ -7,20 +7,26 @@ import {TeamManagement} from './TeamManagement'
 import {WorkforceManagement} from './WorkforceManagement'
 import {ReportsPage} from './Reports'
 import {EarningsPage} from './Earnings'
+import {ManagementRoles} from './ManagementRoles'
 
 const roles={
  super_admin:'ዋና አስተዳዳሪ',admin:'ዋና አስተዳዳሪ',branch_admin:'የቅርንጫፍ አስተዳዳሪ',
  lead:'መሪ ሻጭ',lead_sales:'መሪ ሻጭ',assistant:'ረዳት',driver:'ሾፌር'
 }
-const nav={dashboard:'ዳሽቦርድ',products:'ምርቶች',earnings:'ገቢ እና ክፍያ',branches:'ድርጅቶች እና ቅርንጫፎች',users:'ተጠቃሚዎች',teams:'ቡድን እና Split',workforce:'ሰራተኛ እና Attendance',sales:'ሽያጭ',commissions:'ኮሚሽን',reports:'ሪፖርቶች',profile:'መገለጫ'}
+const nav={dashboard:'ዳሽቦርድ',products:'ምርቶች',earnings:'ገቢ እና ክፍያ',branches:'ድርጅቶች እና ቅርንጫፎች',users:'ተጠቃሚዎች',roles:'የአስተዳደር ሚናዎች',teams:'ቡድን እና Split',workforce:'ሰራተኛ እና Attendance',sales:'ሽያጭ',commissions:'ኮሚሽን',reports:'ሪፖርቶች',profile:'መገለጫ'}
 const normalizePhone=v=>{let d=String(v||'').replace(/\D/g,'');if(d.startsWith('251'))return '+'+d;if(d.startsWith('0'))return '+251'+d.slice(1);return d? '+'+d:''}
 
 async function loadProfile(id){
  const {data,error}=await supabase.from('profiles').select('*').eq('id',id).single()
  if(error)throw error
  if(!data.active)throw new Error('ACCOUNT_DISABLED')
- if(!['super_admin','admin','branch_admin'].includes(data.role))throw new Error('STAFF_ACCESS_RESTRICTED')
- return data
+ if(['super_admin','admin','branch_admin'].includes(data.role))return data
+ if(!String(data.role||'').startsWith('custom_'))throw new Error('STAFF_ACCESS_RESTRICTED')
+ const {data:roleInfo,error:roleError}=await supabase.from('management_roles').select('id,code,name_am,active').eq('code',data.role).eq('active',true).maybeSingle()
+ if(roleError||!roleInfo)throw new Error('STAFF_ACCESS_RESTRICTED')
+ const {data:perms,error:permError}=await supabase.from('management_role_permissions').select('permission_code,enabled,permissions(module,name_am)').eq('role_id',roleInfo.id).eq('enabled',true)
+ if(permError)throw permError
+ return {...data,management_role_name:roleInfo.name_am,management_permissions:(perms||[]).map(p=>({permission_code:p.permission_code,module:p.permissions?.module||''}))}
 }
 function errorText(e){
  const m=e?.message||''
@@ -100,20 +106,23 @@ export default function App(){
   <p className="mt-5 text-center text-xs text-zinc-500">Dirsha-ድርሻ</p>
  </form></div>
 
- const items=global?['dashboard','branches','users','teams','products','sales','commissions','earnings','reports','profile']:branchAdmin?['dashboard','users','teams','products','sales','commissions','earnings','reports','profile']:['dashboard','sales','commissions','earnings','reports','profile']
+ const customRole=role.startsWith('custom_')
+ const customPages=new Set((user?.management_permissions||[]).flatMap(p=>{const code=String(p.permission_code||'').toLowerCase(),module=String(p.module||'').toLowerCase();return [module,code.split('.')[0],code.split(':')[0],code.startsWith('page_')?code.slice(5):'']}))
+ const customAllowed=page=>page==='dashboard'||page==='profile'||customPages.has(page)||customPages.has('page.'+page)||customPages.has('pages.'+page)||customPages.has('view_'+page)
+ const items=global?['dashboard','branches','users','roles','teams','workforce','products','sales','commissions','earnings','reports','profile']:branchAdmin?['dashboard','users','teams','products','sales','commissions','earnings','reports','profile']:customRole?['dashboard','products','users','teams','workforce','sales','commissions','earnings','reports','profile'].filter(x=>customAllowed(x)):['dashboard','sales','commissions','earnings','reports','profile']
  return <div className="app-shell min-h-screen text-slate-100 md:flex">
   <aside className={sidebarOpen?"hidden w-64 shrink-0 flex-col border-r border-white/10 bg-[#101827] text-slate-200 md:flex":"hidden"}>
    <div className="flex h-20 items-center gap-3 border-b border-white/10 px-6"><div className="grid h-10 w-10 place-items-center rounded-xl bg-emerald-400 text-xl font-black text-slate-950">D</div><div><div className="font-black tracking-wide text-white">Dirsha<span className="text-emerald-400">-ድርሻ</span></div><div className="text-[11px] text-slate-400">Commission workspace</div></div></div>
    <div className="px-4 pt-6 text-[10px] font-bold uppercase tracking-[.2em] text-slate-500">Workspace</div>
    <nav className="flex-1 space-y-1 px-3 py-3">{items.map(x=><button key={x} onClick={()=>{setPage(x);if(window.matchMedia('(max-width: 767px)').matches)setSidebarOpen(false)}} className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold transition ${page===x?'bg-emerald-400 text-slate-950 shadow-lg shadow-emerald-950/20':'text-slate-300 hover:bg-white/5 hover:text-white'}`}><span className="w-5 text-center">{({dashboard:'▦',products:'▤',branches:'⌂',users:'♙',teams:'♧',workforce:'◷',sales:'↗',commissions:'％',earnings:'◈',reports:'▥',profile:'◉'})[x]||'•'}</span>{nav[x]}{page===x&&<span className="ml-auto h-1.5 w-1.5 rounded-full bg-slate-950"/>}</button>)}</nav>
-   <div className="border-t border-white/10 p-4"><div className="mb-3 flex items-center gap-3 rounded-xl bg-white/5 p-3"><div className="grid h-9 w-9 place-items-center rounded-full bg-slate-700 font-bold text-white">{(user.full_name||'D').slice(0,1)}</div><div className="min-w-0"><div className="truncate text-sm font-semibold text-white">{user.full_name||'User'}</div><div className="truncate text-xs text-slate-400">{roles[role]||role}</div></div></div><button onClick={logout} className="w-full rounded-xl border border-white/10 px-3 py-2.5 text-left text-sm text-slate-300 hover:bg-white/5">↪ ውጣ</button></div>
+   <div className="border-t border-white/10 p-4"><div className="mb-3 flex items-center gap-3 rounded-xl bg-white/5 p-3"><div className="grid h-9 w-9 place-items-center rounded-full bg-slate-700 font-bold text-white">{(user.full_name||'D').slice(0,1)}</div><div className="min-w-0"><div className="truncate text-sm font-semibold text-white">{user.full_name||'User'}</div><div className="truncate text-xs text-slate-400">{roles[role]||user.management_role_name||role}</div></div></div><button onClick={logout} className="w-full rounded-xl border border-white/10 px-3 py-2.5 text-left text-sm text-slate-300 hover:bg-white/5">↪ ውጣ</button></div>
   </aside>
   <div className="min-w-0 flex-1">
    <header className="sticky top-0 z-30 border-b border-white/10 bg-[#0b111b]/90 px-4 py-3 text-slate-100 backdrop-blur-xl md:px-8"><div className="flex items-center justify-between gap-4"><div className="flex min-w-0 items-center gap-3"><button type="button" onClick={()=>setSidebarOpen(v=>!v)} aria-label={sidebarOpen?"የጎን ሜኑ ደብቅ":"የጎን ሜኑ ክፈት"} title={sidebarOpen?"የጎን ሜኑ ደብቅ":"የጎን ሜኑ ክፈት"} className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-white/10 bg-white/5 text-lg text-slate-100 transition hover:bg-white/10">☰</button><div><div className="text-xs font-semibold text-slate-400">DIRSHA / WORKSPACE</div><h1 className="mt-1 text-lg font-black">{nav[page]||'Dashboard'}</h1></div></div><div className="flex items-center gap-2"><div className="hidden rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-400 sm:block dark:border-zinc-700 dark:bg-zinc-800">⌕ ፈልግ…</div><div className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 bg-white text-lg dark:border-zinc-700 dark:bg-zinc-800">♧</div><button onClick={()=>setPage('profile')} title="መገለጫዬን ይመልከቱ / ያስተካክሉ" aria-label="መገለጫዬን ይመልከቱ / ያስተካክሉ" className="grid h-10 w-10 place-items-center rounded-full border-2 border-emerald-300 bg-emerald-100 font-bold text-emerald-800 shadow-sm transition hover:ring-2 hover:ring-emerald-400 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">{(user.full_name||'D').slice(0,1).toUpperCase()}</button></div></div>
     {sidebarOpen&&<nav className="mt-3 flex gap-2 overflow-x-auto pb-1 md:hidden">{items.map(x=><button key={x} onClick={()=>{setPage(x);if(window.matchMedia('(max-width: 767px)').matches)setSidebarOpen(false)}} className={`whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold ${page===x?'bg-sky-400 text-slate-950':'bg-white/5 text-slate-300 hover:bg-white/10'}`}>{nav[x]}</button>)}</nav>}
    </header>
    <main className="workspace-main mx-auto max-w-[1600px] p-3 md:p-4 xl:p-8">
-    {page==='dashboard'&&<Dashboard user={user} global={global} branchAdmin={branchAdmin} setPage={setPage} items={items}/>}{page==='products'&&(global||branchAdmin)&&<ProductsPage user={user}/>}    {page==='branches'&&global&&<OrganizationManagement/>}
+    {page==='dashboard'&&<Dashboard user={user} global={global} branchAdmin={branchAdmin||customRole&&!!user.branch_id} setPage={setPage} items={items}/>}{page==='products'&&(global||branchAdmin)&&<ProductsPage user={user}/>}    {page==='branches'&&global&&<OrganizationManagement/>}{page==='roles'&&global&&<ManagementRoles currentUser={user}/>}
     {page==='users'&&(global||branchAdmin)&&<UserManagement currentUser={user}/>} {page==='teams'&&(global||branchAdmin)&&<TeamManagement currentUser={user}/>}
     {page==='sales'&&<SalesPage user={user}/>} {page==='commissions'&&(global||branchAdmin)&&<SalesReviewPage user={user}/>} {page==='reports'&&<ReportsPage user={user}/>} {page==='earnings'&&(global||branchAdmin||role==='lead'||role==='lead_sales'||role==='assistant'||role==='driver')&&<EarningsPage user={user}/>}  {page==='profile'&&<ProfilePage user={user} onSaved={setUser}/>}
    </main>
