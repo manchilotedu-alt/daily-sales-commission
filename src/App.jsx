@@ -77,7 +77,7 @@ function ProductsPage({user}){
 function OrganizationsAdminPage({currentUser}){
  const [section,setSection]=useState('organizations')
  return <section className="space-y-5">
-  <div><h2 className="text-2xl font-black">ቅርንጫፍ/ድርጅት</h2><p className="text-sm text-slate-400">ተጠቃሚዎችን፣ ድርጅቶችን፣ ቅርንጫፎችን እና የሚና ፈቃዶችን ከአንድ ቦታ ያስተዳድሩ።</p></div>
+  <div><h2 className="text-2xl font-black">ቅርንጫፍ/ድርጅት</h2><p className="text-sm text-slate-400">ድርጅቶችን፣ ቅርንጫፎችን እና የሚና ፈቃዶችን ከአንድ ቦታ ያስተዳድሩ።</p></div>
   <div className="flex flex-wrap gap-2 rounded-xl border border-white/10 bg-white/[0.03] p-2">
    
    <button type="button" onClick={()=>setSection('organizations')} className={section==='organizations'?'rounded-lg bg-emerald-400 px-4 py-2 text-sm font-bold text-slate-950':'rounded-lg px-4 py-2 text-sm font-semibold text-slate-300 hover:bg-white/5'}>ድርጅቶች እና ቅርንጫፎች</button>
