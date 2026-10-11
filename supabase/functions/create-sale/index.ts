@@ -201,12 +201,15 @@ Deno.serve(async req=>{
   if(recipients.filter((x:any)=>x.role==='lead').length!==1||recipients.filter((x:any)=>x.role==='driver').length!==1)
    return out({error:'The team must have one leader and one driver'},409)
   const pids=[...new Set(recipients.map((x:any)=>String(x.id)))]
-  const {data:people,error:peopleError}=await admin.from('profiles').select('id,active,organization_id,branch_id').in('id',pids)
+  const {data:people,error:peopleError}=await admin.from('profiles').select('id,role,active,organization_id,branch_id').in('id',pids)
   if(peopleError)throw peopleError
   if((people||[]).length!==pids.length)return out({error:'A team member no longer exists'},409)
   for(const person of people||[]){
    if(!person.active||person.organization_id!==org||person.branch_id!==branch)
     return out({error:'A team member is inactive or outside this branch'},409)
+   const assignedRoles=recipients.filter((x:any)=>x.id===person.id).map((x:any)=>x.role)
+   if(assignedRoles.some((role:string)=>role==='driver'?person.role!=='driver':!['lead','lead_sales','assistant'].includes(person.role)))
+    return out({error:'A team member registration is incompatible with the saved team position'},409)
   }
   const {data:splitRows,error:splitError}=await admin.from('team_split_versions')
    .select('id,version,status,team_structure_id,effective_from,effective_to,team_split_lines(role_code,employee_position,percentage,residual_eligible)')
