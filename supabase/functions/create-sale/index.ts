@@ -184,7 +184,7 @@ Deno.serve(async req=>{
   const {data:structureRows,error:structureError}=await admin.from('team_structures')
    .select('id,version,status,effective_from,effective_to,team_structure_roles(role_code,required_count)')
    .eq('team_id',team.id).lte('effective_from',saleDate)
-   .or(`effective_to.is.null,effective_to.gte.${saleDate}`).order('effective_from',{ascending:false}).limit(1)
+   .or(`effective_to.is.null,effective_to.gte.${saleDate}`).order('effective_from',{ascending:false}).order('created_at',{ascending:false}).limit(1)
   if(structureError)throw structureError
   const structure=structureRows?.[0]
   if(!structure)return out({error:'No team structure is configured for this sale date'},409)
