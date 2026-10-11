@@ -26,7 +26,7 @@ The repository migration `20261007_dirsha_safe_upgrade.sql` describes a differen
 
 ## Safe next steps
 
-1. Reconcile the intended RBAC schema with the live schema and identify the exact existing role constraint and RLS policies through an approved read-only schema review.
+1. Reconcile the intended RBAC schema with the live schema and identify the exact existing role constraint and RLS policies through an approved read-only schema review. The current metadata confirms the fixed role check constraint and the existing permissions table shape, but a full policy/constraint-definition review is still needed.
 2. Prepare a forward-only, idempotent migration that preserves the current permissions rows and branch-admin grants; do not run it automatically.
 3. Add server-side role/permission checks before exposing dynamic role assignment in the UI. A UI-only permission toggle is not an authorization boundary.
 4. Update login/profile acceptance and navigation only after the stored role representation is agreed and server enforcement is in place.
