@@ -36,7 +36,7 @@ Deno.serve(async req=>{
    const asOf=validDate(body.as_of)?body.as_of:today()
    const {data:assignments,error:ae2}=await db.from('team_assignments').select('id,employee_id,team_role,employee_position,effective_from,effective_to,assignment_status,created_at,profiles(id,full_name,phone,role)').eq('team_id',team.id).lte('effective_from',asOf).or(`effective_to.is.null,effective_to.gte.${asOf}`).order('created_at',{ascending:false})
    if(ae2)throw ae2
-   const {data:structures,error:se}=await db.from('team_structures').select('id,version,status,effective_from,effective_to,team_structure_roles(role_code,required_count,sequence),team_split_versions(id,version,status,effective_from,effective_to,team_split_lines(role_code,employee_position,percentage,residual_eligible))').eq('team_id',team.id).lte('effective_from',asOf).or(`effective_to.is.null,effective_to.gte.${asOf}`).order('version',{ascending:false})
+   const {data:structures,error:se}=await db.from('team_structures').select('id,version,status,effective_from,effective_to,team_structure_roles(role_code,required_count,position_no),team_split_versions(id,version,status,effective_from,effective_to,team_split_lines(role_code,employee_position,percentage,residual_eligible))').eq('team_id',team.id).lte('effective_from',asOf).or(`effective_to.is.null,effective_to.gte.${asOf}`).order('version',{ascending:false})
    if(se)throw se
    const structure=(structures||[]).find((s:any)=>s.status==='active')||null
    const counts=(structure?.team_structure_roles||[]).reduce((acc:any,r:any)=>({...acc,[r.role_code]:Number(r.required_count)}),{})
@@ -98,7 +98,7 @@ Deno.serve(async req=>{
     const {data:ns,error:ne}=await db.from('team_structures').insert({team_id:team.id,version,status:'active',effective_from:start,created_by:me.id}).select('id').single()
     if(ne)throw ne
     structureId=ns.id
-    const roleRows=[['lead',counts.lead],['assistant',counts.assistant],['driver',counts.driver]].filter((x:any)=>Number(x[1])>0).map((x:any)=>({team_structure_id:structureId,role_code:x[0],required_count:Number(x[1]),sequence:x[0]==='lead'?1:x[0]==='assistant'?2:3}))
+    const roleRows=[['lead',counts.lead],['assistant',counts.assistant],['driver',counts.driver]].filter((x:any)=>Number(x[1])>0).map((x:any)=>({team_structure_id:structureId,role_code:x[0],required_count:Number(x[1]),position_no:x[0]==='lead'?1:x[0]==='assistant'?2:3}))
     const {error:re}=await db.from('team_structure_roles').insert(roleRows)
     if(re)throw re
     const previousActive=(allStructures||[]).find((s:any)=>s.status==='active'&&!s.effective_to&&s.effective_from<=start&&s.id!==structureId)
