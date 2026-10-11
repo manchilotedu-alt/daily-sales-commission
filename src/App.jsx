@@ -1,6 +1,6 @@
 import React,{useEffect,useState} from 'react'
 import {supabase} from './lib/supabase'
-import {OrganizationManagement,UserManagement} from './Management'
+import {OrganizationManagement,UserManagement,ManagementRoles} from './Management'
 import {TeamManagement} from './TeamManagement'
 import {SalesPage} from './Sales'
 import {SalesReviewPage} from './SalesReview'
@@ -22,8 +22,8 @@ async function loadProfile(id){
  if(!data.active)throw new Error('ACCOUNT_DISABLED')
  if(['super_admin','admin','branch_admin'].includes(data.role))return data
  if(!String(data.role||'').startsWith('custom_'))throw new Error('STAFF_ACCESS_RESTRICTED')
- const {data:roleInfo,error:roleError}=await supabase.from('management_roles').select('id,code,name_am,active').eq('code',data.role).eq('active',true).maybeSingle()
- if(roleError||!roleInfo)throw new Error('STAFF_ACCESS_RESTRICTED')
+ const {data:roleInfo,error:roleError}=await supabase.from('management_roles').select('id,code,name_am,active,organization_id').eq('code',data.role).eq('active',true).maybeSingle()
+ if(roleError||!roleInfo||(roleInfo.organization_id&&roleInfo.organization_id!==data.organization_id))throw new Error('STAFF_ACCESS_RESTRICTED')
  const {data:perms,error:permError}=await supabase.from('management_role_permissions').select('permission_code,enabled,permissions(module,name_am)').eq('role_id',roleInfo.id).eq('enabled',true)
  if(permError)throw permError
  return {...data,management_role_name:roleInfo.name_am,management_permissions:(perms||[]).map(p=>({permission_code:p.permission_code,module:p.permissions?.module||''}))}
@@ -121,8 +121,11 @@ export default function App(){
 
  const customRole=role.startsWith('custom_')
  const customPages=new Set((user?.management_permissions||[]).flatMap(p=>{const code=String(p.permission_code||'').toLowerCase(),module=String(p.module||'').toLowerCase();return [module,code.split('.')[0],code.split(':')[0],code.startsWith('page_')?code.slice(5):'']}))
+ const hasPermCode=code=>(user?.management_permissions||[]).some(p=>p.permission_code===code)
  const customAllowed=page=>page==='dashboard'||page==='profile'||customPages.has(page)||customPages.has('page.'+page)||customPages.has('pages.'+page)||customPages.has('view_'+page)
- const items=global?['dashboard','branches','users','workforce','products','sales','commissions','earnings','reports','profile']:branchAdmin?['dashboard','users','teams','products','sales','commissions','earnings','reports','profile']:customRole?['dashboard','sales','reports','profile'].filter(x=>customAllowed(x)):['dashboard','sales','commissions','earnings','reports','profile']
+ const customItems=['dashboard','users','workforce','products','teams','sales','commissions','earnings','reports','profile'].filter(x=>x==='dashboard'||x==='profile'||(x==='users'&&(hasPermCode('users.create')||hasPermCode('users.manage')))||(x==='workforce'&&hasPermCode('attendance.manage'))||(x==='products'&&(hasPermCode('products.view')||hasPermCode('products.assign')))||(x==='teams'&&(hasPermCode('teams.manage')||hasPermCode('teams.split')))||(x==='sales'&&(hasPermCode('sales.create')||hasPermCode('sales.review')))||(x==='commissions'&&(hasPermCode('commission.view')||hasPermCode('commission.set')||hasPermCode('sales.review')))||(x==='earnings'&&(hasPermCode('earnings.view')||hasPermCode('earnings.adjust')))||(x==='reports'&&(hasPermCode('performance.view')||hasPermCode('reports.export')))
+ const customRoleOrgWide=['users.manage','attendance.manage','sales.review','commission.view','earnings.view','performance.view','reports.export'].some(hasPermCode)
+ const items=global?['dashboard','branches','users','workforce','products','sales','commissions','earnings','reports','profile']:branchAdmin?['dashboard','users','teams','products','sales','commissions','earnings','reports','profile']:customRole?customItems:['dashboard','sales','commissions','earnings','reports','profile']
  return <div className="app-shell min-h-screen text-slate-100 md:flex">
   <aside className={sidebarOpen?"hidden w-64 shrink-0 flex-col border-r border-white/10 bg-[#101827] text-slate-200 md:flex":"hidden"}>
    <div className="flex h-20 items-center gap-3 border-b border-white/10 px-6"><div className="grid h-10 w-10 place-items-center rounded-xl bg-emerald-400 text-xl font-black text-slate-950">D</div><div><div className="font-black tracking-wide text-white">Dirsha<span className="text-emerald-400">-ድርሻ</span></div><div className="text-[11px] text-slate-400">Commission workspace</div></div></div>
@@ -135,9 +138,9 @@ export default function App(){
     {sidebarOpen&&<nav className="mt-3 flex gap-2 overflow-x-auto pb-1 md:hidden">{items.map(x=><button key={x} onClick={()=>{setPage(x);if(window.matchMedia('(max-width: 767px)').matches)setSidebarOpen(false)}} className={`whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold ${page===x?'bg-sky-400 text-slate-950':'bg-white/5 text-slate-300 hover:bg-white/10'}`}>{nav[x]}</button>)}</nav>}
    </header>
    <main className="workspace-main mx-auto max-w-[1600px] p-3 md:p-4 xl:p-8">
-    {page==='dashboard'&&<Dashboard user={user} global={global} branchAdmin={branchAdmin||customRole&&!!user.branch_id} setPage={setPage} items={items}/>}{page==='products'&&(global||branchAdmin)&&<ProductsPage user={user}/>}    {page==='branches'&&global&&<OrganizationsAdminPage currentUser={user}/>}
-    {page==='users'&&(global||branchAdmin)&&<UserManagement currentUser={user}/>} {page==='teams'&&branchAdmin&&<TeamManagement currentUser={user}/>}
-    {page==='sales'&&<SalesPage user={user}/>} {page==='commissions'&&(global||branchAdmin)&&<SalesReviewPage user={user}/>} {page==='reports'&&<ReportsPage user={user}/>} {page==='earnings'&&(global||branchAdmin||role==='lead'||role==='lead_sales'||role==='assistant'||role==='driver')&&<EarningsPage user={user}/>}  {page==='profile'&&<ProfilePage user={user} onSaved={setUser}/>}
+    {page==='dashboard'&&<Dashboard user={user} global={global} branchAdmin={branchAdmin||(customRole&&!!user.branch_id&&!customRoleOrgWide)} setPage={setPage} items={items}/>}{page==='products'&&(global||branchAdmin||(customRole&&(hasPermCode('products.view')||hasPermCode('products.assign'))))&&<ProductsPage user={user}/>} {page==='branches'&&global&&<OrganizationsAdminPage currentUser={user}/>}
+    {page==='users'&&(global||branchAdmin||(customRole&&(hasPermCode('users.create')||hasPermCode('users.manage'))))&&<UserManagement currentUser={user}/>} {page==='workforce'&&(global||branchAdmin||(customRole&&hasPermCode('attendance.manage')))&&<WorkforceManagement currentUser={user}/>} {page==='teams'&&(branchAdmin||(customRole&&(hasPermCode('teams.manage')||hasPermCode('teams.split'))))&&<TeamManagement currentUser={user}/>} 
+    {page==='sales'&&<SalesPage user={user}/>} {page==='commissions'&&(global||branchAdmin||(customRole&&(hasPermCode('commission.view')||hasPermCode('commission.set')||hasPermCode('sales.review')))&&<SalesReviewPage user={user}/>} {page==='reports'&&<ReportsPage user={user}/>} {page==='earnings'&&(global||branchAdmin||role==='lead'||role==='lead_sales'||role==='assistant'||role==='driver'||customRole&&(hasPermCode('earnings.view')||hasPermCode('earnings.adjust')))&&<EarningsPage user={user}/>} {page==='profile'&&<ProfilePage user={user} onSaved={setUser}/>}
    </main>
   </div>
  </div>
