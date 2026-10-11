@@ -32,6 +32,7 @@ Deno.serve(async req=>{
   }
   if(body.action==='management_role'||body.action==='management_role_status'){
    if(!global)return out({error:'Only Super Admin/Admin can manage management roles'},403)
+   if(body.action==='management_role'&&!body.organization_id)return out({error:'organization_id is required'},400)
    if(body.action==='management_role_status'){
     if(!body.role_id)return out({error:'role_id is required'},400)
     const {error}=await a.from('management_roles').update({active:!!body.active,updated_at:new Date().toISOString()}).eq('id',body.role_id)
