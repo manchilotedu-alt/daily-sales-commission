@@ -76,13 +76,13 @@ function ProductsPage({user}){
 function OrganizationsAdminPage({currentUser}){
  const [section,setSection]=useState('organizations')
  return <section className="space-y-5">
-  <div><h2 className="text-2xl font-black">ቅርንጫፍ/ድርጅት</h2><p className="text-sm text-slate-400">ድርጅቶችን፣ ቅርንጫፎችን እና የሚና ፈቃዶችን ከአንድ ቦታ ያስተዳድሩ።</p></div>
+  <div><h2 className="text-2xl font-black">ድርጅቶች፣ ቅርንጫፎች እና ሰራተኞች</h2><p className="text-sm text-slate-400">ድርጅትን፣ በድርጅቱ ስር የሚፈጠሩ ቅርንጫፎችን፣ ሰራተኞችን እና ሚናዎችን ከአንድ ገጽ ያስተዳድሩ።</p></div>
   <div className="flex flex-wrap gap-2 rounded-xl border border-white/10 bg-white/[0.03] p-2">
-   
    <button type="button" onClick={()=>setSection('organizations')} className={section==='organizations'?'rounded-lg bg-emerald-400 px-4 py-2 text-sm font-bold text-slate-950':'rounded-lg px-4 py-2 text-sm font-semibold text-slate-300 hover:bg-white/5'}>ድርጅቶች እና ቅርንጫፎች</button>
-   <button type="button" onClick={()=>setSection('roles')} className={section==='roles'?'rounded-lg bg-emerald-400 px-4 py-2 text-sm font-bold text-slate-950':'rounded-lg px-4 py-2 text-sm font-semibold text-slate-300 hover:bg-white/5'}>የሚናና ፈቃድ አስተዳደር</button>
+   <button type="button" onClick={()=>setSection('employees')} className={section==='employees'?'rounded-lg bg-emerald-400 px-4 py-2 text-sm font-bold text-slate-950':'rounded-lg px-4 py-2 text-sm font-semibold text-slate-300 hover:bg-white/5'}>ሰራተኞች እና ሚናዎች</button>
+   <button type="button" onClick={()=>setSection('roles')} className={section==='roles'?'rounded-lg bg-emerald-400 px-4 py-2 text-sm font-bold text-slate-950':'rounded-lg px-4 py-2 text-sm font-semibold text-slate-300 hover:bg-white/5'}>ተጨማሪ ሚናዎች</button>
   </div>
-  {section==='organizations'?<OrganizationManagement/>:<ManagementRoles currentUser={currentUser}/>}
+  {section==='organizations'?<OrganizationManagement/>:section==='employees'?<UserManagement currentUser={currentUser}/>:<ManagementRoles currentUser={currentUser}/>}
  </section>
 }
 
@@ -124,7 +124,7 @@ export default function App(){
  const customAllowed=page=>page==='dashboard'||page==='profile'||customPages.has(page)||customPages.has('page.'+page)||customPages.has('pages.'+page)||customPages.has('view_'+page)
  const customItems=['dashboard','users','workforce','products','teams','sales','commissions','earnings','reports','profile'].filter(x=>x==='dashboard'||x==='profile'||(x==='users'&&(hasPermCode('users.create')||hasPermCode('users.manage')))||(x==='workforce'&&hasPermCode('attendance.manage'))||(x==='products'&&(hasPermCode('products.view')||hasPermCode('products.assign')))||(x==='teams'&&(hasPermCode('teams.manage')||hasPermCode('teams.split')))||(x==='sales'&&(hasPermCode('sales.create')||hasPermCode('sales.review')))||(x==='commissions'&&(hasPermCode('commission.view')||hasPermCode('commission.set')||hasPermCode('sales.review')))||(x==='earnings'&&(hasPermCode('earnings.view')||hasPermCode('earnings.adjust')))||(x==='reports'&&(hasPermCode('performance.view')||hasPermCode('reports.export'))))
  const customRoleOrgWide=['users.manage','attendance.manage','sales.review','commission.view','earnings.view','performance.view','reports.export'].some(hasPermCode)
- const items=global?['dashboard','branches','users','workforce','products','sales','commissions','earnings','reports','profile']:branchAdmin?['dashboard','users','teams','products','sales','commissions','earnings','reports','profile']:customRole?customItems:['dashboard','sales','commissions','earnings','reports','profile']
+ const items=global?['dashboard','branches','workforce','products','sales','commissions','earnings','reports','profile']:branchAdmin?['dashboard','users','teams','products','sales','commissions','earnings','reports','profile']:customRole?customItems:['dashboard','sales','commissions','earnings','reports','profile']
  return <div className="app-shell min-h-screen text-slate-100 md:flex">
   <aside className={sidebarOpen?"hidden w-64 shrink-0 flex-col border-r border-white/10 bg-[#101827] text-slate-200 md:flex":"hidden"}>
    <div className="flex h-20 items-center gap-3 border-b border-white/10 px-6"><div className="grid h-10 w-10 place-items-center rounded-xl bg-emerald-400 text-xl font-black text-slate-950">D</div><div><div className="font-black tracking-wide text-white">Dirsha<span className="text-emerald-400">-ድርሻ</span></div><div className="text-[11px] text-slate-400">Commission workspace</div></div></div>
