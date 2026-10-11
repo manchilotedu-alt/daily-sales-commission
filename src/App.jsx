@@ -19,11 +19,13 @@ async function loadProfile(id){
  const {data,error}=await supabase.from('profiles').select('*').eq('id',id).single()
  if(error)throw error
  if(!data.active)throw new Error('ACCOUNT_DISABLED')
+ if(!['super_admin','admin','branch_admin'].includes(data.role))throw new Error('STAFF_ACCESS_RESTRICTED')
  return data
 }
 function errorText(e){
  const m=e?.message||''
  if(m==='ACCOUNT_DISABLED')return 'ይህ አካውንት ታግዷል።'
+ if(m==='STAFF_ACCESS_RESTRICTED')return 'የሽያጭ ሠራተኞች በመተግበሪያው መግባት አይችሉም። ምደባና የኮሚሽን ስራ በቅርንጫፍ አስተዳዳሪ ይተዳደራል።'
  if(/invalid login credentials/i.test(m))return 'ስልክ ቁጥር ወይም የይለፍ ቃል ስህተት ነው።'
  if(/network|fetch/i.test(m))return 'የኢንተርኔት ግንኙነት ችግር አለ።'
  return m||'ስህተት ተከስቷል።'
@@ -72,7 +74,7 @@ export default function App(){
  const global=['super_admin','admin'].includes(role)
  const branchAdmin=role==='branch_admin'
 
- const refresh=async()=>{try{const {data:{user:u}}=await supabase.auth.getUser();if(!u){setUser(null);return}setUser(await loadProfile(u.id))}catch(e){setUser(null)}}
+ const refresh=async()=>{try{const {data:{user:u}}=await supabase.auth.getUser();if(!u){setUser(null);return}setUser(await loadProfile(u.id))}catch(e){if(e?.message==='STAFF_ACCESS_RESTRICTED')await supabase.auth.signOut();setUser(null)}}
  useEffect(()=>{refresh().finally(()=>setLoading(false));const {data:{subscription}}=supabase.auth.onAuthStateChange((_e,session)=>{if(session?.user)loadProfile(session.user.id).then(setUser).catch(()=>setUser(null));else setUser(null)});return()=>subscription.unsubscribe()},[])
 
  const login=async e=>{
@@ -84,7 +86,7 @@ export default function App(){
    const {data,error}=await supabase.auth.signInWithPassword(credentials)
    if(error)throw error
    setUser(await loadProfile(data.user.id))
-  }catch(e){setError(errorText(e))}
+  }catch(e){if(e?.message==='STAFF_ACCESS_RESTRICTED')await supabase.auth.signOut();setError(errorText(e))}
  }
  const logout=async()=>{await supabase.auth.signOut();setUser(null);setPage('dashboard')}
 
