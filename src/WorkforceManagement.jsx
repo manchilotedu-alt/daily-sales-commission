@@ -189,6 +189,7 @@ export function WorkforceManagement({currentUser}){
   absent:attendanceRows.filter(x=>x.attendance_status==='absent').length,
   total:attendanceRows.length
  }),[attendanceRows])
+ const absentEmployees=useMemo(()=>attendanceRows.filter(x=>x.attendance_status==='absent').map(x=>({...x,person:users.find(u=>u.id===x.employee_id)})).filter(x=>x.person),[attendanceRows,users])
 
  const saveAttendance=async()=>{
   const missing=attendanceRows.filter(x=>x.attendance_status==='absent'&&!String(reasonById[x.employee_id]||'').trim())
@@ -214,7 +215,6 @@ export function WorkforceManagement({currentUser}){
      <div className="flex flex-wrap items-center gap-2"><b>{u.full_name||'—'}</b><span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs dark:bg-zinc-800">{roleLabel(u.role)}</span>{status&&<span className={'rounded-full px-2 py-0.5 text-xs '+(status==='present'?'bg-emerald-500/10 text-emerald-600':status==='absent'?'bg-rose-500/10 text-rose-500':'bg-amber-500/10 text-amber-600')}>{attendanceLabel(status)}</span>}</div>
      <div className="mt-1 text-sm text-zinc-500">{u.phone||'ስልክ የለም'}{u.role==='driver'&&u.plate_number?' · ታርጋ: '+u.plate_number:''}</div>
     </button>
-    {canManageAttendance&&status==='absent'&&<input className="input sm:max-w-xs" value={reasonById[u.id]||''} onChange={e=>setReasonById(prev=>({...prev,[u.id]:e.target.value}))} placeholder="የቀሪነት ምክንያት (አስፈላጊ)"/>}
    </div>
    {!u.active&&<div className="mt-2 text-xs text-rose-500">{statusLabel(u.employee_status||'inactive')}</div>}
   </div>
@@ -237,6 +237,7 @@ export function WorkforceManagement({currentUser}){
    <Metric label="በዚህ ቀን ተገኝተዋል" value={rosterCounts.present}/>
    <Metric label="በዚህ ቀን ቀሪ" value={rosterCounts.absent}/>
   </div>
+  {canManageAttendance&&absentEmployees.length>0&&<div className="rounded-2xl border bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900"><h3 className="mb-3 font-bold">የቀሪ ሰራተኞች ምክንያት</h3><p className="mb-3 text-sm text-zinc-500">ሁሉንም ቀሪ ሰራተኞች ምክንያት ያስገቡ። ይህ ዝርዝር ከላይ ባለው የፍለጋ ማጣሪያ አይደበቅም።</p><div className="grid gap-3 md:grid-cols-2">{absentEmployees.map(a=><label key={a.employee_id} className="text-sm"><span className="mb-1 block font-semibold">{a.person.full_name} · {roleLabel(a.person.role)} · {branchFor(a.person)}</span><input className="input" value={reasonById[a.employee_id]||''} onChange={e=>setReasonById(prev=>({...prev,[a.employee_id]:e.target.value}))} placeholder="የቀሪነት ምክንያት (አስፈላጊ)"/></label>)}</div></div>}
   {loading&&<div className="text-sm text-zinc-500">የሰራተኞች መረጃ በመጫን ላይ…</div>}
   {groups.map(g=><div key={g.key} className="rounded-2xl border bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
    <div className="mb-4"><h3 className="font-bold">{g.branchName}</h3><p className="text-xs text-zinc-500">{g.orgName}</p></div>
