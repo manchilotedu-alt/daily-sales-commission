@@ -61,27 +61,43 @@ Deno.serve(async req=>{
   if(uniqueKeys.size!==requestedItems.length)return out({error:'Duplicate product/variant line'},400)
 
   const ids=[...new Set(requestedItems.map(x=>x.product_id))]
-  const {data:products,error:pe}=await admin.from('products')
-   .select('id,en,am,rate,organization_id,active').in('id',ids)
-  if(pe)throw pe
-  if(!products||products.length!==ids.length)return out({error:'One or more products were not found'},400)
+  // Chunk large ID lists to keep database request URLs manageable.
+  const chunks=<T>(values:T[],size=100):T[][]=>{
+   const result:T[][]=[]
+   for(let i=0;i<values.length;i+=size)result.push(values.slice(i,i+size))
+   return result
+  }
+  const products:any[]=[]
+  for(const group of chunks(ids)){
+   const {data,error}=await admin.from('products')
+    .select('id,en,am,rate,organization_id,active').in('id',group)
+   if(error)throw error
+   products.push(...(data||[]))
+  }
+  if(products.length!==ids.length)return out({error:'One or more products were not found'},400)
   for(const p of products){
    if(p.active===false)return out({error:'One or more products are inactive'},409)
    if(p.organization_id!==org)return out({error:'Product belongs to another organization'},403)
   }
-  const {data:assignedProducts,error:assignmentError}=await admin.from('product_branch_assignments')
-   .select('product_id,branch_id').eq('organization_id',org).eq('active',true).in('product_id',ids)
-  if(assignmentError)throw assignmentError
-  const assignedSet=new Set((assignedProducts||[]).filter((a:any)=>branch ? a.branch_id===branch : a.branch_id===null).map((a:any)=>Number(a.product_id)))
+  const assignedProducts:any[]=[]
+  for(const group of chunks(ids)){
+   const {data,error}=await admin.from('product_branch_assignments')
+    .select('product_id,branch_id').eq('organization_id',org).eq('active',true).in('product_id',group)
+   if(error)throw error
+   assignedProducts.push(...(data||[]))
+  }
+  const assignedSet=new Set(assignedProducts.filter((a:any)=>branch ? a.branch_id===branch : a.branch_id===null).map((a:any)=>Number(a.product_id)))
   if(ids.some(id=>!assignedSet.has(Number(id))))return out({error:'One or more products are not assigned to this branch'},403)
 
   const variants=requestedItems.filter(x=>x.product_variant_id).map(x=>x.product_variant_id)
   let variantRows:any[]=[]
   if(variants.length){
-   const {data,error}=await admin.from('product_variants')
-    .select('id,product_id,organization_id,active').in('id',variants)
-   if(error)throw error
-   variantRows=data||[]
+   for(const group of chunks([...new Set(variants)])){
+    const {data,error}=await admin.from('product_variants')
+     .select('id,product_id,organization_id,active').in('id',group)
+    if(error)throw error
+    variantRows.push(...(data||[]))
+   }
    if(variantRows.length!==variants.length)return out({error:'One or more variants were not found'},400)
    for(const v of variantRows){
     if(v.organization_id!==org||v.active===false)return out({error:'Invalid product variant'},400)
@@ -95,12 +111,6 @@ Deno.serve(async req=>{
   }
 
   // Resolve prices in batches so large sales do not issue one database request per item.
-  // Chunk IDs to keep PostgREST URLs and response sizes manageable.
-  const chunks=<T>(values:T[],size=100):T[][]=>{
-   const result:T[][]=[]
-   for(let i=0;i<values.length;i+=size)result.push(values.slice(i,i+size))
-   return result
-  }
   const basePriceRows:any[]=[]
   for(const group of chunks(ids)){
    const {data,error}=await admin.from('product_price_versions')
