@@ -3,6 +3,9 @@
 alter table public.sales
   add column if not exists receipt_reference text;
 
+alter table public.team_assignments
+  add column if not exists employee_position integer not null default 1;
+
 create index if not exists idx_sales_receipt_reference
   on public.sales(organization_id, branch_id, receipt_reference)
   where receipt_reference is not null;
