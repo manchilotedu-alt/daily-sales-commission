@@ -93,7 +93,7 @@ export function TeamManagement({currentUser}){
  const submitSplit=async e=>{
   e.preventDefault();if(!selected)return setError('ቡድን ይምረጡ')
   if(!teamState?.structure)return setError('መጀመሪያ የቡድን ምደባውን አስቀምጡ')
-  if(Math.abs(Math.round(splitSum*100)-10000)>0)return setError('የSplit ድምር 100% መሆን አለበት')
+  if(Math.abs(Math.round(splitSum*10000)-1000000)>0)return setError('የSplit ድምር 100% መሆን አለበት')
   setBusy(true);setError('')
   try{await teamAction({action:'create_split',team_id:selected,lines:splitLines,effective_from:effectiveFrom,confirm_change:confirmChange});setConfirmChange(false);await loadState(selected,effectiveFrom);await load()}
   catch(e){setError(e.message)}finally{setBusy(false)}
