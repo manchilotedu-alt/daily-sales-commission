@@ -9,7 +9,7 @@ Deno.serve(async req=>{
   const a=createClient(url,key,{auth:{autoRefreshToken:false,persistSession:false}}),h=req.headers.get('Authorization')||'';if(!h.startsWith('Bearer '))return out({error:'Unauthorized'},401)
   const {data:{user:caller}}=await a.auth.getUser(h.slice(7));if(!caller)return out({error:'Unauthorized'},401)
   const {data:cp}=await a.from('profiles').select('role,active,organization_id,branch_id').eq('id',caller.id).single();if(!cp?.active)return out({error:'Forbidden'},403)
-  const global=['super_admin','admin'].includes(cp.role),body=await req.json(),allowed=['branch_admin','lead','lead_sales','assistant','driver']
+  const global=['super_admin','admin'].includes(cp.role),body=await req.json(),allowed=global?['branch_admin','lead','lead_sales','assistant','driver']:['lead','lead_sales','assistant','driver']
   const hasPerm=async code=>{if(global)return true;const {data}=await a.from('branch_admin_permissions').select('enabled').eq('user_id',caller.id).eq('permission_code',code).maybeSingle();return data?.enabled===true}
   if(body.action==='create'){
    if(!global && cp.role==='branch_admin' && !(await hasPerm('users.create')))return out({error:'የሰራተኛ መፍጠር ፍቃድ አልተሰጠዎትም'},403)
@@ -33,6 +33,7 @@ Deno.serve(async req=>{
   const id=body.user_id;if(!id)return out({error:'user_id is required'},400)
   const {data:t}=await a.from('profiles').select('role,phone,organization_id,branch_id,vehicle_id').eq('id',id).single();if(!t)return out({error:'User not found'},404)
   if(['super_admin','admin'].includes(t.role))return out({error:'Global administrators cannot be managed here'},403)
+  if(!global && t.role==='branch_admin')return out({error:'Branch Admin accounts can only be managed by Super Admin/Admin'},403)
   if(!global&&(t.organization_id!==cp.organization_id||t.branch_id!==cp.branch_id))return out({error:'Forbidden'},403)
   if(!global && cp.role==='branch_admin' && !(await hasPerm('users.manage')))return out({error:'የሰራተኛ ማስተዳደር ፍቃድ አልተሰጠዎትም'},403)
   if(body.action==='activate'){const {error}=await a.from('profiles').update({active:!!body.active}).eq('id',id);if(error)throw error;return out({ok:true})}
