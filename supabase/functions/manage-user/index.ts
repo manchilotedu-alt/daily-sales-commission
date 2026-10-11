@@ -10,7 +10,20 @@ Deno.serve(async req=>{
   const {data:{user:caller}}=await a.auth.getUser(h.slice(7));if(!caller)return out({error:'Unauthorized'},401)
   const {data:cp}=await a.from('profiles').select('role,active,organization_id,branch_id').eq('id',caller.id).single();if(!cp?.active)return out({error:'Forbidden'},403)
   const global=['super_admin','admin'].includes(cp.role),body=await req.json(),allowed=global?['branch_admin','lead','lead_sales','assistant','driver']:['lead','lead_sales','assistant','driver']
-  const hasPerm=async code=>{if(global)return true;const {data}=await a.from('branch_admin_permissions').select('enabled').eq('user_id',caller.id).eq('permission_code',code).maybeSingle();return data?.enabled===true}
+  const hasPerm=async code=>{
+   if(global)return true
+   if(cp.role==='branch_admin'){
+    const {data,error}=await a.from('branch_admin_permissions').select('enabled').eq('user_id',caller.id).eq('permission_code',code).maybeSingle()
+    return !error&&data?.enabled===true
+   }
+   if(String(cp.role||'').startsWith('custom_')){
+    const {data:role,error:roleError}=await a.from('management_roles').select('id').eq('code',cp.role).eq('active',true).maybeSingle()
+    if(roleError||!role)return false
+    const {data,error}=await a.from('management_role_permissions').select('enabled').eq('role_id',role.id).eq('permission_code',code).maybeSingle()
+    return !error&&data?.enabled===true
+   }
+   return false
+  }
   const roleAllowed=async role=>{
    if(allowed.includes(role))return true
    if(!global||!/^custom_[a-z0-9_]{2,48}$/.test(String(role||'')))return false
@@ -43,7 +56,7 @@ Deno.serve(async req=>{
    return out({ok:true,role_id:role.id,role:role.code})
   }
   if(body.action==='create'){
-   if(!global && cp.role==='branch_admin' && !(await hasPerm('users.create')))return out({error:'የሰራተኛ መፍጠር ፍቃድ አልተሰጠዎትም'},403)
+   if(!global && !(await hasPerm('users.create')))return out({error:'የሰራተኛ መፍጠር ፍቃድ አልተሰጠዎትም'},403)
    if(!(await roleAllowed(body.role))||!String(body.full_name||'').trim()||!String(body.password||'').trim())return out({error:'Full name, role, and password are required'},400)
    if(String(body.password).length<8)return out({error:'Password must be at least 8 characters'},400)
    const org=global?body.organization_id:cp.organization_id,branch=global?body.branch_id:cp.branch_id;if(!org||!branch)return out({error:'Organization and branch are required'},400)
@@ -67,7 +80,7 @@ Deno.serve(async req=>{
   if(['super_admin','admin'].includes(t.role))return out({error:'Global administrators cannot be managed here'},403)
   if(!global && t.role==='branch_admin')return out({error:'Branch Admin accounts can only be managed by Super Admin/Admin'},403)
   if(!global&&(t.organization_id!==cp.organization_id||t.branch_id!==cp.branch_id))return out({error:'Forbidden'},403)
-  if(!global && cp.role==='branch_admin' && !(await hasPerm('users.manage')))return out({error:'የሰራተኛ ማስተዳደር ፍቃድ አልተሰጠዎትም'},403)
+  if(!global && !(await hasPerm('users.manage')))return out({error:'የሰራተኛ ማስተዳደር ፍቃድ አልተሰጠዎትም'},403)
   if(body.action==='activate'){const {error}=await a.from('profiles').update({active:!!body.active}).eq('id',id);if(error)throw error;return out({ok:true})}
   if(body.action==='reset_password'){if(String(body.password||'').length<8)return out({error:'Password must be at least 8 characters'},400);const {error}=await a.auth.admin.updateUserById(id,{password:body.password});if(error)throw error;return out({ok:true})}
   if(body.action==='delete'){const {error}=await a.auth.admin.deleteUser(id);if(error)throw error;return out({ok:true})}
