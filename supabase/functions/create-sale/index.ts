@@ -214,7 +214,7 @@ Deno.serve(async req=>{
   const {data:splitRows,error:splitError}=await admin.from('team_split_versions')
    .select('id,version,status,team_structure_id,effective_from,effective_to,team_split_lines(role_code,employee_position,percentage,residual_eligible)')
    .eq('team_structure_id',structure.id).eq('status','approved').lte('effective_from',saleDate)
-   .or(`effective_to.is.null,effective_to.gte.${saleDate}`).order('effective_from',{ascending:false}).limit(1)
+   .or(`effective_to.is.null,effective_to.gte.${saleDate}`).order('effective_from',{ascending:false}).order('created_at',{ascending:false}).order('version',{ascending:false}).limit(1)
   if(splitError)throw splitError
   const splitVersion=splitRows?.[0]||null
   if(!splitVersion)return out({error:'No approved commission split exists for this team structure and sale date'},409)
