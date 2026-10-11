@@ -132,7 +132,7 @@ export function TeamManagement({currentUser}){
    <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{splitLines.map((l,i)=><label key={l.role_code+'-'+l.employee_position} className="text-sm">{roleNames[l.role_code]||l.role_code}{l.role_code==='assistant'?' #'+l.employee_position:''} (%)<input className="input mt-1" type="number" min="0" max="100" step="0.01" value={l.percentage} onChange={e=>setSplitLines(prev=>prev.map((x,j)=>j===i?{...x,percentage:e.target.value}:x))}/></label>)}</div>
    <div className="mt-3 text-sm font-bold">ድምር፦ {money(splitSum)}%</div>
    {teamState?.split&&<label className="mt-3 flex items-center gap-2 text-sm"><input type="checkbox" checked={confirmChange} onChange={e=>setConfirmChange(e.target.checked)}/> ነባሩን Split በአዲስ ስሪት ለመቀየር እፈልጋለሁ</label>}
-   <button className="btn mt-3" disabled={busy||!selected||!teamState?.structure||!confirmChange&&!teamState?.split&&false}>Split ለSuper Admin ላክ</button>
+   <button className="btn mt-3" disabled={busy||!selected||!teamState?.structure||!!teamState?.split&&!confirmChange}>Split ለSuper Admin ላክ</button>
   </form>
   <div className="rounded-2xl border bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
    <h3 className="font-bold mb-3">የSplit ማጽደቂያ እና ታሪክ</h3>
