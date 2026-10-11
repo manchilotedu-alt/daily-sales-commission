@@ -122,22 +122,23 @@ Deno.serve(async req=>{
 
   // Commission rules are independent from price. A rule may match product/variant through conditions JSON.
   const {data:rules,error:re}=await admin.from('commission_rules')
-   .select('id,name,rule_type,calculation_basis,price_dependency_mode,commission_rule_versions(id,version,effective_from,effective_to,fixed_amount,percentage,tier_scope,conditions,status)')
+   .select('id,name,rule_type,basis,price_dependency,product_id,product_variant_id,branch_id,priority,status,commission_rule_versions(id,version,effective_from,effective_to,fixed_amount,rate_percent,status,commission_rule_tiers(id,min_value,max_value,rate_percent,fixed_amount,tier_order))')
    .eq('organization_id',org).eq('active',true)
   if(re)throw re
 
   const matchRule=(line:any)=>{
    const candidates:any[]=[]
    for(const r of rules||[]){
+    if(r.status!=='active')continue
+    if(r.branch_id && r.branch_id!==branch)continue
+    if(r.product_id!=null && Number(r.product_id)!==Number(line.product_id))continue
+    if(r.product_variant_id!=null && String(r.product_variant_id)!==String(line.product_variant_id||''))continue
     for(const v of (r.commission_rule_versions||[])){
-     if(v.status!=='active'||v.effective_from>saleDate||(v.effective_to&&v.effective_to<saleDate))continue
-     const cond=v.conditions||{}
-     const productMatch=cond.product_ids==null||cond.product_ids.map(Number).includes(Number(line.product_id))
-     const variantMatch=cond.variant_ids==null||!line.product_variant_id||cond.variant_ids.includes(line.product_variant_id)
-     if(productMatch&&variantMatch)candidates.push({r,v})
+     if(v.status!=='active'||String(v.effective_from).slice(0,10)>saleDate||(v.effective_to&&String(v.effective_to).slice(0,10)<saleDate))continue
+     candidates.push({r,v})
     }
    }
-   candidates.sort((a,b)=>Number(b.v.version)-Number(a.v.version))
+   candidates.sort((a,b)=>Number(a.r.priority||100)-Number(b.r.priority||100)||Number(b.v.version)-Number(a.v.version))
    return candidates[0]||null
   }
 
@@ -147,15 +148,17 @@ Deno.serve(async req=>{
    let commission=0
    if(matched){
     const {r,v}=matched
-    const basis=r.calculation_basis
-    const base=basis==='quantity'?line.qty:basis==='unit_price'?line.rate:line.line_amt
-    if(r.rule_type==='fixed')commission=Number(v.fixed_amount||0)*(basis==='quantity'?line.qty:1)
-    else if(r.rule_type==='percentage')commission=Number(base)*Number(v.percentage||0)/100
-    else if(r.rule_type==='none')commission=0
-    else if(r.rule_type==='tiered'){
-     const tiers=Array.isArray(v.conditions?.tiers)?v.conditions.tiers:[]
-     const tier=tiers.filter((t:any)=>base>=Number(t.min||0)&& (t.max==null||base<=Number(t.max))).sort((a:any,b:any)=>Number(b.min||0)-Number(a.min||0))[0]
-     if(tier) commission=tier.type==='fixed'?Number(tier.amount||0)*(basis==='quantity'?line.qty:1):Number(base)*Number(tier.percentage||0)/100
+    const basis=r.basis
+    const base=basis==='quantity'?line.qty:(basis==='unit_price'||basis==='price_range')?line.rate:line.line_amt
+    if(r.rule_type==='fixed_amount')commission=Number(v.fixed_amount||0)*(basis==='quantity'?line.qty:1)
+    else if(r.rule_type==='percentage')commission=Number(base)*Number(v.rate_percent||0)/100
+    else if(r.rule_type==='no_commission')commission=0
+    else if(r.rule_type==='tiered'||r.rule_type==='price_range'){
+     const tiers=(v.commission_rule_tiers||[]).slice().sort((a:any,b:any)=>Number(a.tier_order)-Number(b.tier_order))
+     const tier=tiers.filter((t:any)=>base>=Number(t.min_value||0)&&(t.max_value==null||base<=Number(t.max_value))).sort((a:any,b:any)=>Number(b.min_value||0)-Number(a.min_value||0))[0]
+     if(tier) commission=tier.fixed_amount!=null?Number(tier.fixed_amount)*(basis==='quantity'?line.qty:1):Number(base)*Number(tier.rate_percent||0)/100
+    } else if(r.rule_type==='daily_total'||r.rule_type==='period_total'){
+     return out({error:'Daily-total and period-total commission rules need aggregate calculation before sales can be submitted'},409)
     }
     line.commission_rule_version_id=v.id
    }else{
