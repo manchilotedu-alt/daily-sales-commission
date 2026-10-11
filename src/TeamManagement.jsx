@@ -8,7 +8,7 @@ async function teamAction(body){const {data,error}=await supabase.functions.invo
 
 export function TeamManagement({currentUser}){
  const global=['super_admin','admin'].includes(currentUser.role)
- const [teams,setTeams]=useState([]),[users,setUsers]=useState([]),[splits,setSplits]=useState([]),[selected,setSelected]=useState(''),[teamState,setTeamState]=useState(null)
+ const [teams,setTeams]=useState([]),[users,setUsers]=useState([]),[vehicles,setVehicles]=useState([]),[splits,setSplits]=useState([]),[selected,setSelected]=useState(''),[teamState,setTeamState]=useState(null)
  const [error,setError]=useState(''),[busy,setBusy]=useState(false),[teamName,setTeamName]=useState(''),[vehicle,setVehicle]=useState('')
  const [lead,setLead]=useState(''),[assistants,setAssistants]=useState(['']),[driver,setDriver]=useState(''),[effectiveFrom,setEffectiveFrom]=useState(today())
  const [splitLines,setSplitLines]=useState([{role_code:'lead',employee_position:1,percentage:50,residual_eligible:true},{role_code:'driver',employee_position:1,percentage:20,residual_eligible:false}])
@@ -19,13 +19,14 @@ export function TeamManagement({currentUser}){
    let tq=supabase.from('teams').select('id,name,status,vehicle_id,branch_id,organization_id,created_at').order('created_at',{ascending:false})
    let uq=supabase.from('profiles').select('id,full_name,phone,role,active,organization_id,branch_id').eq('active',true).order('full_name')
    let sq=supabase.from('team_split_versions').select('id,version,status,effective_from,effective_to,submitted_by,submitted_at,approved_by,approved_at,returned_reason,team_structure_id').order('created_at',{ascending:false})
-   if(!global){tq=tq.eq('organization_id',currentUser.organization_id).eq('branch_id',currentUser.branch_id);uq=uq.eq('organization_id',currentUser.organization_id).eq('branch_id',currentUser.branch_id)}
-   const [t,u,s]=await Promise.all([tq,uq,sq])
-   if(t.error||u.error||s.error)throw t.error||u.error||s.error
+   let vq=supabase.from('vehicles').select('id,plate_number,vehicle_code,branch_id,organization_id,status').eq('status','active').order('plate_number')
+   if(!global){tq=tq.eq('organization_id',currentUser.organization_id).eq('branch_id',currentUser.branch_id);uq=uq.eq('organization_id',currentUser.organization_id).eq('branch_id',currentUser.branch_id);vq=vq.eq('organization_id',currentUser.organization_id).eq('branch_id',currentUser.branch_id)}
+   const [t,u,s,v]=await Promise.all([tq,uq,sq,vq])
+   if(t.error||u.error||s.error||v.error)throw t.error||u.error||s.error||v.error
    const teamRows=t.data||[],teamIds=new Set(teamRows.map(x=>x.id))
    let splitRows=s.data||[]
    if(!global&&teamIds.size){const {data:structures,error}=await supabase.from('team_structures').select('id,team_id').in('team_id',[...teamIds]);if(error)throw error;const ids=new Set((structures||[]).map(x=>x.id));splitRows=splitRows.filter(x=>ids.has(x.team_structure_id))}
-   setTeams(teamRows);setUsers(u.data||[]);setSplits(splitRows)
+   setTeams(teamRows);setUsers(u.data||[]);setVehicles(v.data||[]);setSplits(splitRows)
    if(!selected&&teamRows.length)setSelected(teamRows[0].id)
   }catch(e){setError(e.message||'መረጃውን መጫን አልተቻለም')}
  }
@@ -107,7 +108,7 @@ export function TeamManagement({currentUser}){
   {error&&<div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-300">{error}</div>}
   <form onSubmit={create} className="grid gap-3 rounded-2xl border bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900 md:grid-cols-3">
    <input className="input" required placeholder="የቡድን ስም" value={teamName} onChange={e=>setTeamName(e.target.value)}/>
-   <input className="input" placeholder="የመኪና ሰሌዳ / Vehicle ID (አማራጭ)" value={vehicle} onChange={e=>setVehicle(e.target.value)}/>
+   <select className="input" value={vehicle} onChange={e=>setVehicle(e.target.value)}><option value="">መኪና አልተመደበም (አማራጭ)</option>{vehicles.map(v=><option key={v.id} value={v.id}>{v.plate_number}{v.vehicle_code?` · ${v.vehicle_code}`:''}</option>)}</select>
    <button className="btn" disabled={busy}>ቡድን ፍጠር</button>
   </form>
   <div className="grid gap-4 lg:grid-cols-2">
