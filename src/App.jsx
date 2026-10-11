@@ -7,7 +7,6 @@ import {SalesReviewPage} from './SalesReview'
 import {WorkforceManagement} from './WorkforceManagement'
 import {ReportsPage} from './Reports'
 import {EarningsPage} from './Earnings'
-import {ManagementRoles} from './ManagementRoles'
 
 const roles={
  super_admin:'ዋና አስተዳዳሪ',admin:'ዋና አስተዳዳሪ',branch_admin:'የቅርንጫፍ አስተዳዳሪ',
