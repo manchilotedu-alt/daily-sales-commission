@@ -21,8 +21,8 @@ async function loadProfile(id){
  if(!data.active)throw new Error('ACCOUNT_DISABLED')
  if(['super_admin','admin','branch_admin'].includes(data.role))return data
  if(!String(data.role||'').startsWith('custom_'))throw new Error('STAFF_ACCESS_RESTRICTED')
- const {data:roleInfo,error:roleError}=await supabase.from('management_roles').select('id,code,name_am,active,organization_id').eq('code',data.role).eq('active',true).maybeSingle()
- if(roleError||!roleInfo||(roleInfo.organization_id&&roleInfo.organization_id!==data.organization_id))throw new Error('STAFF_ACCESS_RESTRICTED')
+ const {data:roleInfo,error:roleError}=await supabase.from('management_roles').select('id,code,name_am,active,organization_id').eq('code',data.role).eq('organization_id',data.organization_id).eq('active',true).maybeSingle()
+ if(roleError||!roleInfo)throw new Error('STAFF_ACCESS_RESTRICTED')
  const {data:perms,error:permError}=await supabase.from('management_role_permissions').select('permission_code,enabled,permissions(module,name_am)').eq('role_id',roleInfo.id).eq('enabled',true)
  if(permError)throw permError
  return {...data,management_role_name:roleInfo.name_am,management_permissions:(perms||[]).map(p=>({permission_code:p.permission_code,module:p.permissions?.module||''}))}
