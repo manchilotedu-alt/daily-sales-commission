@@ -273,7 +273,7 @@ Deno.serve(async req=>{
    const line=splitLines.find((x:any)=>x.role_code===r.role&&Number(x.employee_position)===r.position)
    if(!line)continue
    const amount=money(grossCommission*Number(line.percentage)/100)
-   allocations.push({employee_id:r.id,role_code:r.role,team_assignment_id:r.assignment_id,team_split_version_id:splitVersion.id,split_percentage:Number(line.percentage),allocated_commission:amount})
+   allocations.push({employee_id:r.id,role_code:r.role,employee_position:r.position,team_assignment_id:r.assignment_id,team_split_version_id:splitVersion.id,split_percentage:Number(line.percentage),allocated_commission:amount})
    allocated=money(allocated+amount)
   }
   const residual=money(grossCommission-allocated)
