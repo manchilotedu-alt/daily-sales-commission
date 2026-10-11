@@ -99,8 +99,8 @@ Deno.serve(async req=>{
   for(const x of requestedItems){
    const p=products.find(p=>Number(p.id)===x.product_id)
    let priceRow:any=null
-   const q=admin.from('product_price_versions').select('id,price,product_id,product_variant_id')
-    .eq('organization_id',org).eq('product_id',x.product_id).eq('status','active')
+   const q=admin.from('product_price_versions').select('id,price,product_id,product_variant_id,variant_id')
+    .eq('organization_id',org).eq('product_id',x.product_id).is('product_variant_id',null).is('variant_id',null).eq('status','active')
     .lte('effective_from',saleDate).or(`effective_to.is.null,effective_to.gte.${saleDate}`)
     .order('effective_from',{ascending:false}).limit(1)
    const {data,error}=await q
