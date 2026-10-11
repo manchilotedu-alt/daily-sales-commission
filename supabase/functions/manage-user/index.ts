@@ -67,17 +67,11 @@ Deno.serve(async req=>{
    const phone=normalize(body.phone);if(!/^\+2519\d{8}$/.test(phone))return out({error:'Valid Ethiopian phone number is required'},400)
    const plate=String(body.plate_number||'').trim();if(body.role==='driver'&&!plate)return out({error:'Vehicle plate number is required for a driver'},400)
    const {data:u,error:ue}=await a.auth.admin.createUser({phone,password:body.password,phone_confirm:true,user_metadata:{full_name:String(body.full_name).trim()}});if(ue)return out({error:ue.message},400)
-   const {error:pe}=await a.from('profiles').upsert({id:u.user.id,full_name:String(body.full_name).trim(),phone,role:body.role,active:true,organization_id:org,branch_id:branch});if(pe){await a.auth.admin.deleteUser(u.user.id);return out({error:pe.message},400)}
-   if(body.role==='driver'){
-    const {data:v,error:ve}=await a.from('vehicles').insert({organization_id:org,branch_id:branch,plate_number:plate,status:'active'}).select('id').single()
-    if(ve){await a.auth.admin.deleteUser(u.user.id);return out({error:ve.message},400)}
-    const {error:linkError}=await a.from('profiles').update({vehicle_id:v.id}).eq('id',u.user.id)
-    if(linkError){await a.from('vehicles').delete().eq('id',v.id);await a.auth.admin.deleteUser(u.user.id);return out({error:linkError.message},400)}
-   }
+   const {error:pe}=await a.from('profiles').upsert({id:u.user.id,full_name:String(body.full_name).trim(),phone,role:body.role,active:true,organization_id:org,branch_id:branch,plate_number:body.role==='driver'?plate:null});if(pe){await a.auth.admin.deleteUser(u.user.id);return out({error:pe.message},400)}
    return out({ok:true,user_id:u.user.id})
   }
   const id=body.user_id;if(!id)return out({error:'user_id is required'},400)
-  const {data:t}=await a.from('profiles').select('role,phone,organization_id,branch_id,vehicle_id').eq('id',id).single();if(!t)return out({error:'User not found'},404)
+  const {data:t}=await a.from('profiles').select('role,phone,organization_id,branch_id,plate_number').eq('id',id).single();if(!t)return out({error:'User not found'},404)
   if(['super_admin','admin'].includes(t.role))return out({error:'Global administrators cannot be managed here'},403)
   if(!global && t.role==='branch_admin')return out({error:'Branch Admin accounts can only be managed by Super Admin/Admin'},403)
   if(!global&&(t.organization_id!==cp.organization_id||t.branch_id!==cp.branch_id))return out({error:'Forbidden'},403)
@@ -94,13 +88,8 @@ Deno.serve(async req=>{
    if(body.role==='branch_admin'){const {data:x}=await a.from('profiles').select('id').eq('branch_id',branch).eq('role','branch_admin').eq('active',true).neq('id',id).limit(1);if(x?.length)return out({error:'This branch already has an active Branch Admin'},409)}
    const nextPhone=normalize(body.phone);if(!/^\+2519\d{8}$/.test(nextPhone))return out({error:'Valid Ethiopian phone number is required'},400)
    const plate=String(body.plate_number||'').trim();if(body.role==='driver'&&!plate)return out({error:'Vehicle plate number is required for a driver'},400)
-   let vehicleId=t.vehicle_id||null
-   if(body.role==='driver'){
-    if(vehicleId){const {error:ve}=await a.from('vehicles').update({plate_number:plate,organization_id:org,branch_id:branch,updated_at:new Date().toISOString()}).eq('id',vehicleId);if(ve)throw ve}
-    else {const {data:v,error:ve}=await a.from('vehicles').insert({organization_id:org,branch_id:branch,plate_number:plate,status:'active'}).select('id').single();if(ve)throw ve;vehicleId=v.id}
-   }
    const {error:ae}=await a.auth.admin.updateUserById(id,{phone:nextPhone});if(ae)throw ae
-   const {error:pe}=await a.from('profiles').update({full_name:String(body.full_name).trim(),phone:nextPhone,role:body.role,organization_id:org,branch_id:branch,vehicle_id:vehicleId}).eq('id',id)
+   const {error:pe}=await a.from('profiles').update({full_name:String(body.full_name).trim(),phone:nextPhone,role:body.role,organization_id:org,branch_id:branch,plate_number:body.role==='driver'?plate:null}).eq('id',id)
    if(pe){await a.auth.admin.updateUserById(id,{phone:t.phone||undefined}).catch(()=>{});throw pe}
    return out({ok:true})
   }
