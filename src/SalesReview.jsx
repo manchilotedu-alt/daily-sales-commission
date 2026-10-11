@@ -96,7 +96,17 @@ function SaleDetails({sale}){
     supabase.from('sale_items').select('id,product_id,product_variant_id,qty,rate,line_amt,unit_price_snapshot,sales_value,commission_amount').eq('sale_id',sale.id),
     supabase.from('sale_commission_allocations').select('id,employee_id,role_code,split_percentage,allocated_commission,team_assignment_id,team_split_version_id').eq('sale_id',sale.id)
    ])
-   if(live){setItems(ir.data||[]);setAlloc(ar.data||[]);setLoading(false)}
+   const itemRows=ir.data||[]
+   const productIds=[...new Set(itemRows.map(x=>x.product_id).filter(Boolean))]
+   const variantIds=[...new Set(itemRows.map(x=>x.product_variant_id).filter(Boolean))]
+   const [pr,vr]=await Promise.all([
+    productIds.length?supabase.from('products').select('id,am,en').eq('organization_id',sale.organization_id).in('id',productIds):Promise.resolve({data:[],error:null}),
+    variantIds.length?supabase.from('product_variants').select('id,name_am,name_en,unit').eq('organization_id',sale.organization_id).in('id',variantIds):Promise.resolve({data:[],error:null})
+   ])
+   const productMap=new Map((pr.data||[]).map(x=>[Number(x.id),x]))
+   const variantMap=new Map((vr.data||[]).map(x=>[Number(x.id),x]))
+   const displayItems=itemRows.map(x=>({...x,productName:productMap.get(Number(x.product_id))?.am||productMap.get(Number(x.product_id))?.en||String(x.product_id),variant:variantMap.get(Number(x.product_variant_id))}))
+   if(live){setItems(displayItems);setAlloc(ar.data||[]);setLoading(false)}
   })()
   return()=>{live=false}
  },[sale.id])
@@ -109,7 +119,7 @@ function SaleDetails({sale}){
   </div>
   <div className="overflow-x-auto rounded-xl border dark:border-zinc-800">
    <table className="w-full text-sm"><thead><tr className="border-b dark:border-zinc-800"><th className="p-2 text-left">ምርት</th><th className="p-2 text-left">መጠን/ቅጽ</th><th className="p-2 text-right">ብዛት</th><th className="p-2 text-right">የአንዱ ዋጋ</th><th className="p-2 text-right">የሽያጭ ዋጋ</th><th className="p-2 text-right">ኮሚሽን</th></tr></thead>
-    <tbody>{items.map(i=><tr key={i.id} className="border-b last:border-0 dark:border-zinc-800"><td className="p-2">{i.product_id}</td><td className="p-2">{i.product_variant_id||'—'}</td><td className="p-2 text-right">{i.qty}</td><td className="p-2 text-right">{money(i.unit_price_snapshot??i.rate)}</td><td className="p-2 text-right">{money(i.sales_value??i.line_amt)}</td><td className="p-2 text-right">{money(i.commission_amount)}</td></tr>)}</tbody>
+    <tbody>{items.map(i=><tr key={i.id} className="border-b last:border-0 dark:border-zinc-800"><td className="p-2">{i.productName}</td><td className="p-2">{i.variant?(i.variant.name_am||i.variant.name_en||'—')+(i.variant.unit?' · '+i.variant.unit:''):'—'}</td><td className="p-2 text-right">{i.qty}</td><td className="p-2 text-right">{money(i.unit_price_snapshot??i.rate)}</td><td className="p-2 text-right">{money(i.sales_value??i.line_amt)}</td><td className="p-2 text-right">{money(i.commission_amount)}</td></tr>)}</tbody>
    </table>
    {loading&&<div className="p-3 text-sm text-zinc-500">ዝርዝሩን በመጫን ላይ…</div>}
   </div>
