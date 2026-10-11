@@ -64,6 +64,17 @@ Deno.serve(async req=>{if(req.method==='OPTIONS')return new Response('ok',{heade
   const staff=people||[]
   if(!staff.length)return out({ok:true,work_date:date,created:0,message:'No active sales staff or drivers found'})
   const ids=staff.map((x:any)=>x.id)
+  const {data:structures,error:structureError}=await db.from('team_structures')
+   .select('id,team_id,effective_from,effective_to,status,team_structure_roles(role_code,required_count)')
+   .in('team_id',teamIds).lte('effective_from',date).or(`effective_to.is.null,effective_to.gte.${date}`)
+   .order('effective_from',{ascending:false})
+  if(structureError)throw structureError
+  const structureCounts=new Map<string,any>()
+  for(const s of structures||[]){
+   if(!structureCounts.has(s.team_id)){
+    structureCounts.set(s.team_id,(s.team_structure_roles||[]).reduce((acc:any,r:any)=>({...acc,[r.role_code]:Number(r.required_count)}),{}))
+   }
+  }
   const {data:assignments,error:assignError}=await db.from('team_assignments')
    .select('id,team_id,employee_id,team_role,employee_position,effective_from,effective_to,created_at')
    .in('team_id',teamIds).lte('effective_from',date).or(`effective_to.is.null,effective_to.gte.${date}`)
@@ -71,7 +82,9 @@ Deno.serve(async req=>{if(req.method==='OPTIONS')return new Response('ok',{heade
   if(assignError)throw assignError
   const currentByPosition=new Map<string,any>()
   for(const x of assignments||[]){
-   const k=`${x.team_id}:${x.team_role}:${Number(x.employee_position||1)}`
+   const position=Number(x.employee_position||1),counts=structureCounts.get(x.team_id)||{}
+   if(position>Number(counts[x.team_role]||0))continue
+   const k=`${x.team_id}:${x.team_role}:${position}`
    if(!currentByPosition.has(k))currentByPosition.set(k,x)
   }
   const assignedIds=new Set([...currentByPosition.values()].map((x:any)=>x.employee_id))
