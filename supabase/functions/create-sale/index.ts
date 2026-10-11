@@ -242,22 +242,6 @@ Deno.serve(async req=>{
    target.allocated_commission=money(target.allocated_commission+residual)
   }
 
-  const allocations:any[]=[]
-  let allocated=0
-  for(const r of recipients){
-   const line=splitLines.find(x=>x.role_code===r.role&&Number(x.employee_position)===r.position)
-   if(!line)continue
-   const amount=money(grossCommission*Number(line.percentage)/100)
-   allocations.push({employee_id:r.id,role_code:r.role,team_split_version_id:splitVersion?.id||null,split_percentage:Number(line.percentage),allocated_commission:amount})
-   allocated=money(allocated+amount)
-  }
-  const residual=money(grossCommission-allocated)
-  if(Math.abs(residual)>0){
-   const target=allocations.find(x=>splitLines.find(l=>l.role_code===x.role_code&&Number(l.employee_position)===1)?.residual_eligible)
-   if(!target)return out({error:'Commission split leaves a remainder but no residual recipient is configured'},409)
-   target.allocated_commission=money(target.allocated_commission+residual)
-  }
-
   const leadAmt=money(allocations.filter(x=>x.role_code==='lead').reduce((n,x)=>n+x.allocated_commission,0))
   const assistantAmt=money(allocations.filter(x=>x.role_code==='assistant').reduce((n,x)=>n+x.allocated_commission,0))
   const driverAmt=money(allocations.filter(x=>x.role_code==='driver').reduce((n,x)=>n+x.allocated_commission,0))
