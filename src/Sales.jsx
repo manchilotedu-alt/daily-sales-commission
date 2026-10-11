@@ -5,7 +5,7 @@ const roleLabels={lead:'መሪ ሻጭ',lead_sales:'መሪ ሻጭ',assistant:'ረ
 const normalize= v=>String(v||'').trim()
 
 export function SalesPage({user}){
- const [products,setProducts]=useState([]),[variants,setVariants]=useState([]),[staff,setStaff]=useState([]),[items,setItems]=useState([]),[teams,setTeams]=useState([]),[teamId,setTeamId]=useState(''),[receiptReference,setReceiptReference]=useState(''),[saleDate,setSaleDate]=useState(new Date().toISOString().slice(0,10))
+ const [products,setProducts]=useState([]),[variants,setVariants]=useState([]),[priceVersions,setPriceVersions]=useState([]),[staff,setStaff]=useState([]),[items,setItems]=useState([]),[teams,setTeams]=useState([]),[teamId,setTeamId]=useState(''),[receiptReference,setReceiptReference]=useState(''),[saleDate,setSaleDate]=useState(new Date().toISOString().slice(0,10))
  const [leadId,setLeadId]=useState(user.role==='lead'||user.role==='lead_sales'?user.id:''),[assistantId,setAssistantId]=useState(user.role==='assistant'?user.id:''),[driverId,setDriverId]=useState(user.role==='driver'?user.id:'')
  const [productId,setProductId]=useState(''),[variantId,setVariantId]=useState(''),[qty,setQty]=useState(1),[busy,setBusy]=useState(false),[error,setError]=useState(''),[ok,setOk]=useState('')
  const canSubmit=user.role==='branch_admin'
@@ -23,8 +23,15 @@ export function SalesPage({user}){
    if(s.error)throw s.error
    if(a.error)throw a.error
    const allowed=new Set((a.data||[]).map(x=>Number(x.product_id)))
-   setProducts((p.data||[]).filter(x=>allowed.has(Number(x.id))));setVariants(v.data||[]);setStaff(s.data||[])
-  }catch(e){setError(e.message)}})()},[user.organization_id,user.branch_id,canAssignStaff])
+   const visibleProducts=(p.data||[]).filter(x=>allowed.has(Number(x.id)))
+   let priceRows=[]
+   if(visibleProducts.length){
+    const {data:pr,error:priceError}=await supabase.from('product_price_versions').select('product_id,product_variant_id,variant_id,price,effective_from,effective_to,status').eq('organization_id',user.organization_id).in('product_id',visibleProducts.map(x=>x.id)).eq('status','active').lte('effective_from',saleDate).or(`effective_to.is.null,effective_to.gte.${saleDate}`).order('effective_from',{ascending:false})
+    if(priceError)throw priceError
+    priceRows=pr||[]
+   }
+   setProducts(visibleProducts);setVariants(v.data||[]);setStaff(s.data||[]);setPriceVersions(priceRows)
+  }catch(e){setError(e.message)}})()},[user.organization_id,user.branch_id,canAssignStaff,saleDate])
 
  useEffect(()=>{(async()=>{
   if(user.role!=='branch_admin'||!user.organization_id||!user.branch_id)return
@@ -40,13 +47,21 @@ export function SalesPage({user}){
  const total=useMemo(()=>items.reduce((n,x)=>n+x.salesValue,0),[items])
  const totalQuantity=useMemo(()=>items.reduce((n,x)=>n+x.qty,0),[items])
 
+ const resolveRate=(product,variant)=>{
+  const rows=priceVersions.filter(x=>Number(x.product_id)===Number(product.id))
+  const latest=matches=>matches.slice().sort((a,b)=>String(b.effective_from).localeCompare(String(a.effective_from)))[0]
+  const variantPrice=variant?latest(rows.filter(x=>String(x.product_variant_id)===String(variant.id))):null
+  const basePrice=latest(rows.filter(x=>x.product_variant_id==null&&x.variant_id==null))
+  return Number(variantPrice?.price??basePrice?.price??product.rate??0)
+ }
  const add=()=>{
   setError('');setOk('')
   const n=Number(qty)
   if(!selected||!Number.isInteger(n)||n<1)return setError('ምርት እና ትክክለኛ ብዛት ይምረጡ።')
   if(selectedVariants.length&&!selectedVariant)return setError('የምርቱን መጠን ይምረጡ።')
   const key=selected.id+':'+(variantId||'')
-  setItems(prev=>{const i=prev.findIndex(x=>x.key===key);if(i<0)return [...prev,{key,product_id:selected.id,product_variant_id:variantId||null,name:displayName,qty:n,rate:Number(selected.rate||0),salesValue:n*Number(selected.rate||0)}];const a=[...prev];a[i]={...a[i],qty:a[i].qty+n,salesValue:(a[i].qty+n)*a[i].rate};return a})
+  const rate=resolveRate(selected,selectedVariant)
+  setItems(prev=>{const i=prev.findIndex(x=>x.key===key);if(i<0)return [...prev,{key,product_id:selected.id,product_variant_id:variantId||null,name:displayName,qty:n,rate,salesValue:n*rate}];const a=[...prev];a[i]={...a[i],qty:a[i].qty+n,salesValue:(a[i].qty+n)*a[i].rate};return a})
   setProductId('');setVariantId('');setQty(1)
  }
  const submit=async e=>{
@@ -69,7 +84,7 @@ export function SalesPage({user}){
   {ok&&<div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-600 dark:text-emerald-300">{ok}</div>}
   <form onSubmit={submit} className="space-y-5">
    <div className="grid gap-3 rounded-2xl border bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900 md:grid-cols-2">
-    <label className="text-sm">የሽያጭ ቀን<input className="input mt-1" type="date" value={saleDate} onChange={e=>setSaleDate(e.target.value)} required/></label>
+    <label className="text-sm">የሽያጭ ቀን<input className="input mt-1" type="date" value={saleDate} onChange={e=>setSaleDate(e.target.value)} disabled={items.length>0} title={items.length?'የቀን ለውጥ ለማድረግ መጀመሪያ የሽያጭ ዝርዝሩን ባዶ ያድርጉ።':''} required/></label>
     <label className="text-sm">የሽያጭ ቡድን<select className="input mt-1" value={teamId} onChange={e=>setTeamId(e.target.value)} required><option value="">ቡድን ይምረጡ</option>{teams.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></label>
     <label className="text-sm">የደረሰኝ ቁጥር / ማጣቀሻ<input className="input mt-1" type="text" maxLength="120" value={receiptReference} onChange={e=>setReceiptReference(e.target.value)} placeholder="ለምሳሌ: RCP-000123" required/></label>
     <label className="text-sm">ምርት<select className="input mt-1" value={productId} onChange={e=>{setProductId(e.target.value);setVariantId('')}}><option value="">ምርት ይምረጡ</option>{products.map(p=><option key={p.id} value={p.id}>{p.am||p.en}</option>)}</select></label>
