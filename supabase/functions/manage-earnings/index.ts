@@ -48,7 +48,9 @@ Deno.serve(async req=>{
    const {data:e}=await supabase.from('employee_period_earnings').select('*,commission_periods:commission_period_id(*)').eq('id',eId).single()
    if(!e||e.commission_periods.organization_id!==actor.organization_id)return json({error:'Not found'},404)
    const period=e.commission_periods;await ensureUnlocked(period)
-   if((branchAdmin||finance)&&e.employee_id!==user.id){const {data:ep}=await supabase.from('profiles').select('branch_id').eq('id',e.employee_id).single();if(!ep||ep.branch_id!==actor.branch_id)return json({error:'Outside branch scope'},403)}
+   // Separate approval from self-interest: nobody may adjust their own earnings.
+   if(e.employee_id===actor.id)return json({error:'You cannot adjust your own earnings'},403)
+   if((branchAdmin||finance)){const {data:ep}=await supabase.from('profiles').select('branch_id,organization_id').eq('id',e.employee_id).single();if(!ep||ep.branch_id!==actor.branch_id||ep.organization_id!==actor.organization_id)return json({error:'Outside branch scope'},403)}
    const field=type==='bonus'?'bonuses':type==='support_allocation'?'support_allocations':type==='deduction'?'deductions':type==='penalty'?'penalties':type==='daily_adjustment'?'daily_adjustments':null;if(!field)return json({error:'Unsupported adjustment type'},400)
    const signed=type==='daily_adjustment'?n(body.signed_amount??body.amount):amount
    const next=round(n(e[field])+signed)
@@ -62,7 +64,7 @@ Deno.serve(async req=>{
 
   if(action==='place_hold'||action==='release_hold'){
    if(!global)return json({error:'Super Admin approval required'},403)
-   const eId=body.employee_period_earnings_id;const {data:e}=await supabase.from('employee_period_earnings').select('*,commission_periods:commission_period_id(*)').eq('id',eId).single();if(!e)return json({error:'Earnings not found'},404);await ensureUnlocked(e.commission_periods)
+   const eId=body.employee_period_earnings_id;const {data:e}=await supabase.from('employee_period_earnings').select('*,commission_periods:commission_period_id(*)').eq('id',eId).single();if(!e||e.commission_periods?.organization_id!==actor.organization_id)return json({error:'Earnings not found'},404);await ensureUnlocked(e.commission_periods)
    if(action==='place_hold'){
     const amount=body.full_hold?netOf(e,0):n(body.amount);if(amount<=0)return json({error:'Hold amount must be greater than zero'},400)
     const {data:h,error:he}=await supabase.from('earnings_holds').insert({employee_period_earnings_id:eId,hold_type:body.hold_type||'operational_review',amount_held:amount,reason:body.reason||'Operational review',placed_by:actor.id}).select().single();if(he)throw he
@@ -90,7 +92,7 @@ Deno.serve(async req=>{
   if(action==='record_payment'){
    if(!global)return json({error:'Super Admin approval required'},403)
    const eId=body.employee_period_earnings_id,amount=n(body.amount);if(!eId||amount<=0)return json({error:'Valid earnings ID and payment amount are required'},400)
-   const {data:e}=await supabase.from('employee_period_earnings').select('*,commission_periods:commission_period_id(*)').eq('id',eId).single();if(!e)return json({error:'Earnings not found'},404)
+   const {data:e}=await supabase.from('employee_period_earnings').select('*,commission_periods:commission_period_id(*)').eq('id',eId).single();if(!e||e.commission_periods?.organization_id!==actor.organization_id)return json({error:'Earnings not found'},404)
    if(!['approved'].includes(e.status)||!['approved'].includes(e.commission_periods.status))return json({error:'Payment requires an approved commission period'},409)
    let {data:p}=await supabase.from('payments').select('*').eq('employee_period_earnings_id',eId).maybeSingle()
    if(!p){const {data:np,error:pe}=await supabase.from('payments').insert({employee_period_earnings_id:eId,approved_amount:n(e.net_payable),paid_amount:0,payment_status:'unpaid',approved_by:actor.id}).select().single();if(pe)throw pe;p=np}
