@@ -34,13 +34,20 @@ Deno.serve(async req=>{
    if(te||!team)return out({error:'Team not found'},404)
    if(!global&&(team.organization_id!==me.organization_id||team.branch_id!==me.branch_id))return out({error:'Team is outside your branch'},403)
    const asOf=validDate(body.as_of)?body.as_of:today()
-   const {data:assignments,error:ae2}=await db.from('team_assignments').select('id,employee_id,team_role,employee_position,effective_from,effective_to,assignment_status,created_at,profiles(id,full_name,phone,role)').eq('team_id',team.id).lte('effective_from',asOf).or(`effective_to.is.null,effective_to.gte.${asOf}`).order('created_at',{ascending:true})
+   const {data:assignments,error:ae2}=await db.from('team_assignments').select('id,employee_id,team_role,employee_position,effective_from,effective_to,assignment_status,created_at,profiles(id,full_name,phone,role)').eq('team_id',team.id).lte('effective_from',asOf).or(`effective_to.is.null,effective_to.gte.${asOf}`).order('created_at',{ascending:false})
    if(ae2)throw ae2
    const {data:structures,error:se}=await db.from('team_structures').select('id,version,status,effective_from,effective_to,team_structure_roles(role_code,required_count,sequence),team_split_versions(id,version,status,effective_from,effective_to,team_split_lines(role_code,employee_position,percentage,residual_eligible))').eq('team_id',team.id).lte('effective_from',asOf).or(`effective_to.is.null,effective_to.gte.${asOf}`).order('version',{ascending:false})
    if(se)throw se
    const structure=(structures||[]).find((s:any)=>s.status==='active')||null
+   const counts=(structure?.team_structure_roles||[]).reduce((acc:any,r:any)=>({...acc,[r.role_code]:Number(r.required_count)}),{})
+   const seen=new Set<string>()
+   const currentAssignments=(assignments||[]).filter((a:any)=>{
+    const position=Number(a.employee_position||1),key=`${a.team_role}:${position}`
+    if(position>Number(counts[a.team_role]||0)||seen.has(key))return false
+    seen.add(key);return true
+   }).sort((a:any,b:any)=>a.team_role.localeCompare(b.team_role)||Number(a.employee_position||1)-Number(b.employee_position||1))
    const approvedSplit=(structure?.team_split_versions||[]).filter((s:any)=>s.status==='approved'&&s.effective_from<=asOf&&(!s.effective_to||s.effective_to>=asOf)).sort((a:any,b:any)=>b.version-a.version)[0]||null
-   return out({ok:true,team,as_of:asOf,assignments:assignments||[],structure,split:approvedSplit})
+   return out({ok:true,team,as_of:asOf,assignments:currentAssignments,structure,split:approvedSplit})
   }
 
   if(action==='set_assignments'){
