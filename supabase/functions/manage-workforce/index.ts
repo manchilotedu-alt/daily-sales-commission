@@ -75,6 +75,7 @@ Deno.serve(async req=>{if(req.method==='OPTIONS')return new Response('ok',{heade
     structureCounts.set(s.team_id,(s.team_structure_roles||[]).reduce((acc:any,r:any)=>({...acc,[r.role_code]:Number(r.required_count)}),{}))
    }
   }
+  if(teamIds.some((id:string)=>!structureCounts.has(id)))return out({error:'At least one active team has no effective structure for this date; attendance was not changed'},409)
   const {data:assignments,error:assignError}=await db.from('team_assignments')
    .select('id,team_id,employee_id,team_role,employee_position,effective_from,effective_to,created_at')
    .in('team_id',teamIds).lte('effective_from',date).or(`effective_to.is.null,effective_to.gte.${date}`)
