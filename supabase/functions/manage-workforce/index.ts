@@ -48,11 +48,10 @@ Deno.serve(async req=>{if(req.method==='OPTIONS')return new Response('ok',{heade
   return out({ok:true,attendance_id:x.id})
  }
  if(a==='sync_team_attendance'){
+  if(me.role!=='branch_admin')return out({error:'Only Branch Admin can sync branch attendance'},403)
   const date=String(b.work_date||today())
   if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||Number.isNaN(Date.parse(date)))return out({error:'Invalid attendance date'},400)
-  let teamQuery=db.from('teams').select('id').eq('organization_id',me.organization_id).eq('branch_id',me.branch_id).eq('status','active')
-  if(globalRole(me.role)&&b.organization_id)teamQuery=teamQuery.eq('organization_id',b.organization_id)
-  if(globalRole(me.role)&&b.branch_id)teamQuery=teamQuery.eq('branch_id',b.branch_id)
+  const teamQuery=db.from('teams').select('id').eq('organization_id',me.organization_id).eq('branch_id',me.branch_id).eq('status','active')
   const {data:teams,error:teamsError}=await teamQuery
   if(teamsError)throw teamsError
   const teamIds=(teams||[]).map((x:any)=>x.id)
