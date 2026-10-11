@@ -45,7 +45,7 @@ export function TeamManagement({currentUser}){
   }catch(e){setError(e.message||'የቡድኑን ሁኔታ ማምጣት አልተቻለም')}
  }
  useEffect(()=>{load()},[])
- useEffect(()=>{if(selected)loadState(selected,effectiveFrom)},[selected])
+ useEffect(()=>{if(selected)loadState(selected,effectiveFrom)},[selected,effectiveFrom])
  const defaultLines=(assistantCount)=>{
   const rows=[{role_code:'lead',employee_position:1,percentage:50,residual_eligible:true}]
   for(let i=1;i<=assistantCount;i++)rows.push({role_code:'assistant',employee_position:i,percentage:Math.floor(30/Math.max(assistantCount,1)*100)/100,residual_eligible:false})
