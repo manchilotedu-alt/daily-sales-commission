@@ -4,7 +4,7 @@ const cors={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'au
 const out=(b,s=200)=>new Response(JSON.stringify(b),{status:s,headers:{...cors,'Content-Type':'application/json'}})
 
 const money=(n:number)=>Math.round((n+Number.EPSILON)*100)/100
-const dateOk=(v:string)=>/^\\d{4}-\\d{2}-\\d{2}$/.test(v)
+const dateOk=(v:string)=>/^\d{4}-\d{2}-\d{2}$/.test(v)
 
 Deno.serve(async req=>{
  if(req.method==='OPTIONS')return new Response('ok',{headers:cors})
