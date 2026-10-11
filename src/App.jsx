@@ -13,7 +13,7 @@ const roles={
  super_admin:'ዋና አስተዳዳሪ',admin:'ዋና አስተዳዳሪ',branch_admin:'የቅርንጫፍ አስተዳዳሪ',
  lead:'መሪ ሻጭ',lead_sales:'መሪ ሻጭ',assistant:'ረዳት',driver:'ሾፌር'
 }
-const nav={dashboard:'ዳሽቦርድ',products:'ምርቶች',earnings:'ገቢ እና ክፍያ',branches:'ተጠቃሚዎች እና ድርጅቶች',users:'ተጠቃሚዎች',teams:'ቡድን እና Split',workforce:'ሰራተኛ እና Attendance',sales:'ሽያጭ',commissions:'ኮሚሽን',reports:'ሪፖርቶች',profile:'መገለጫ'}
+const nav={dashboard:'ዳሽቦርድ',products:'ምርቶች',earnings:'ገቢ እና ክፍያ',branches:'ቅርንጫፍ/ድርጅት',users:'ሰራተኞች',users:'ተጠቃሚዎች',teams:'ቡድን እና Split',workforce:'ሰራተኛ እና Attendance',sales:'ሽያጭ',commissions:'ኮሚሽን',reports:'ሪፖርቶች',profile:'መገለጫ'}
 const normalizePhone=v=>{let d=String(v||'').replace(/\D/g,'');if(d.startsWith('251'))return '+'+d;if(d.startsWith('0'))return '+251'+d.slice(1);return d? '+'+d:''}
 
 async function loadProfile(id){
@@ -75,15 +75,15 @@ function ProductsPage({user}){
 }
 
 function OrganizationsAdminPage({currentUser}){
- const [section,setSection]=useState('users')
+ const [section,setSection]=useState('organizations')
  return <section className="space-y-5">
-  <div><h2 className="text-2xl font-black">ተጠቃሚዎች እና ድርጅቶች</h2><p className="text-sm text-slate-400">ተጠቃሚዎችን፣ ድርጅቶችን፣ ቅርንጫፎችን እና የሚና ፈቃዶችን ከአንድ ቦታ ያስተዳድሩ።</p></div>
+  <div><h2 className="text-2xl font-black">ቅርንጫፍ/ድርጅት</h2><p className="text-sm text-slate-400">ተጠቃሚዎችን፣ ድርጅቶችን፣ ቅርንጫፎችን እና የሚና ፈቃዶችን ከአንድ ቦታ ያስተዳድሩ።</p></div>
   <div className="flex flex-wrap gap-2 rounded-xl border border-white/10 bg-white/[0.03] p-2">
-   <button type="button" onClick={()=>setSection('users')} className={section==='users'?'rounded-lg bg-emerald-400 px-4 py-2 text-sm font-bold text-slate-950':'rounded-lg px-4 py-2 text-sm font-semibold text-slate-300 hover:bg-white/5'}>ተጠቃሚዎች</button>
+   
    <button type="button" onClick={()=>setSection('organizations')} className={section==='organizations'?'rounded-lg bg-emerald-400 px-4 py-2 text-sm font-bold text-slate-950':'rounded-lg px-4 py-2 text-sm font-semibold text-slate-300 hover:bg-white/5'}>ድርጅቶች እና ቅርንጫፎች</button>
    <button type="button" onClick={()=>setSection('roles')} className={section==='roles'?'rounded-lg bg-emerald-400 px-4 py-2 text-sm font-bold text-slate-950':'rounded-lg px-4 py-2 text-sm font-semibold text-slate-300 hover:bg-white/5'}>የሚናና ፈቃድ አስተዳደር</button>
   </div>
-  {section==='users'?<UserManagement currentUser={currentUser}/>:section==='organizations'?<OrganizationManagement/>:<ManagementRoles currentUser={currentUser}/>}
+  {section==='organizations'?<OrganizationManagement/>:<ManagementRoles currentUser={currentUser}/>}
  </section>
 }
 
@@ -122,7 +122,7 @@ export default function App(){
  const customRole=role.startsWith('custom_')
  const customPages=new Set((user?.management_permissions||[]).flatMap(p=>{const code=String(p.permission_code||'').toLowerCase(),module=String(p.module||'').toLowerCase();return [module,code.split('.')[0],code.split(':')[0],code.startsWith('page_')?code.slice(5):'']}))
  const customAllowed=page=>page==='dashboard'||page==='profile'||customPages.has(page)||customPages.has('page.'+page)||customPages.has('pages.'+page)||customPages.has('view_'+page)
- const items=global?['dashboard','branches','workforce','products','sales','commissions','earnings','reports','profile']:branchAdmin?['dashboard','users','teams','products','sales','commissions','earnings','reports','profile']:customRole?['dashboard','sales','reports','profile'].filter(x=>customAllowed(x)):['dashboard','sales','commissions','earnings','reports','profile']
+ const items=global?['dashboard','branches','users','workforce','products','sales','commissions','earnings','reports','profile']:branchAdmin?['dashboard','users','teams','products','sales','commissions','earnings','reports','profile']:customRole?['dashboard','sales','reports','profile'].filter(x=>customAllowed(x)):['dashboard','sales','commissions','earnings','reports','profile']
  return <div className="app-shell min-h-screen text-slate-100 md:flex">
   <aside className={sidebarOpen?"hidden w-64 shrink-0 flex-col border-r border-white/10 bg-[#101827] text-slate-200 md:flex":"hidden"}>
    <div className="flex h-20 items-center gap-3 border-b border-white/10 px-6"><div className="grid h-10 w-10 place-items-center rounded-xl bg-emerald-400 text-xl font-black text-slate-950">D</div><div><div className="font-black tracking-wide text-white">Dirsha<span className="text-emerald-400">-ድርሻ</span></div><div className="text-[11px] text-slate-400">Commission workspace</div></div></div>
@@ -136,7 +136,7 @@ export default function App(){
    </header>
    <main className="workspace-main mx-auto max-w-[1600px] p-3 md:p-4 xl:p-8">
     {page==='dashboard'&&<Dashboard user={user} global={global} branchAdmin={branchAdmin||customRole&&!!user.branch_id} setPage={setPage} items={items}/>}{page==='products'&&(global||branchAdmin)&&<ProductsPage user={user}/>}    {page==='branches'&&global&&<OrganizationsAdminPage currentUser={user}/>}
-    {page==='users'&&branchAdmin&&<UserManagement currentUser={user}/>} {page==='teams'&&branchAdmin&&<TeamManagement currentUser={user}/>}
+    {page==='users'&&(global||branchAdmin)&&<UserManagement currentUser={user}/>} {page==='teams'&&branchAdmin&&<TeamManagement currentUser={user}/>}
     {page==='sales'&&<SalesPage user={user}/>} {page==='commissions'&&(global||branchAdmin)&&<SalesReviewPage user={user}/>} {page==='reports'&&<ReportsPage user={user}/>} {page==='earnings'&&(global||branchAdmin||role==='lead'||role==='lead_sales'||role==='assistant'||role==='driver')&&<EarningsPage user={user}/>}  {page==='profile'&&<ProfilePage user={user} onSaved={setUser}/>}
    </main>
   </div>
