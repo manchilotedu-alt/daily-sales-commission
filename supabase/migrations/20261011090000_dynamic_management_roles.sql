@@ -54,19 +54,8 @@ using (public.is_super_admin())
 with check (public.is_super_admin());
 
 -- Keep all existing built-in roles valid and allow only namespaced custom roles.
-do $$
-declare c record;
-begin
-  for c in
-    select conname
-    from pg_constraint
-    where conrelid = 'public.profiles'::regclass
-      and contype = 'c'
-      and pg_get_constraintdef(oid) ilike '%role%'
-  loop
-    execute format('alter table public.profiles drop constraint %I', c.conname);
-  end loop;
-end $$;
+-- Drop only the confirmed built-in role constraint; preserve unrelated checks.
+alter table public.profiles drop constraint if exists profiles_role_check;
 
 alter table public.profiles
   add constraint profiles_role_builtin_or_custom_check
