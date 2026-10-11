@@ -17,17 +17,17 @@ Deno.serve(async req=>{
     return !error&&data?.enabled===true
    }
    if(String(cp.role||'').startsWith('custom_')){
-    const {data:role,error:roleError}=await a.from('management_roles').select('id').eq('code',cp.role).eq('active',true).maybeSingle()
+    const {data:role,error:roleError}=await a.from('management_roles').select('id,organization_id').eq('code',cp.role).eq('organization_id',cp.organization_id).eq('active',true).maybeSingle()
     if(roleError||!role)return false
     const {data,error}=await a.from('management_role_permissions').select('enabled').eq('role_id',role.id).eq('permission_code',code).maybeSingle()
     return !error&&data?.enabled===true
    }
    return false
   }
-  const roleAllowed=async role=>{
+  const roleAllowed=async (role,organizationId)=>{
    if(allowed.includes(role))return true
    if(!global||!/^custom_[a-z0-9_]{2,48}$/.test(String(role||'')))return false
-   const {data,error}=await a.from('management_roles').select('id').eq('code',role).eq('active',true).maybeSingle()
+   const {data,error}=await a.from('management_roles').select('id').eq('code',role).eq('organization_id',organizationId).eq('active',true).maybeSingle()
    return !error&&!!data
   }
   if(body.action==='management_role'||body.action==='management_role_status'){
@@ -43,11 +43,11 @@ Deno.serve(async req=>{
    if(!/^custom_[a-z0-9_]{2,48}$/.test(code)||!nameAm)return out({error:'Valid custom role code and Amharic name are required'},400)
    let role
    if(body.role_id){
-    const {data,error}=await a.from('management_roles').update({name_am:nameAm,name_en:body.name_en||null,description:body.description||null,updated_at:new Date().toISOString()}).eq('id',body.role_id).select('id,code').single()
+    const {data,error}=await a.from('management_roles').update({name_am:nameAm,name_en:body.name_en||null,description:body.description||null,updated_at:new Date().toISOString()}).eq('id',body.role_id).eq('organization_id',body.organization_id).select('id,code').single()
     if(error)throw error
     role=data
    }else{
-    const {data,error}=await a.from('management_roles').insert({code,name_am:nameAm,name_en:body.name_en||null,description:body.description||null,created_by:caller.id,active:true}).select('id,code').single()
+    const {data,error}=await a.from('management_roles').insert({code,name_am:nameAm,name_en:body.name_en||null,description:body.description||null,organization_id:body.organization_id,created_by:caller.id,active:true}).select('id,code').single()
     if(error)throw error
     role=data
    }
@@ -57,7 +57,7 @@ Deno.serve(async req=>{
   }
   if(body.action==='create'){
    if(!global && !(await hasPerm('users.create')))return out({error:'የሰራተኛ መፍጠር ፍቃድ አልተሰጠዎትም'},403)
-   if(!(await roleAllowed(body.role))||!String(body.full_name||'').trim()||!String(body.password||'').trim())return out({error:'Full name, role, and password are required'},400)
+   if(!(await roleAllowed(body.role,global?body.organization_id:cp.organization_id))||!String(body.full_name||'').trim()||!String(body.password||'').trim())return out({error:'Full name, role, and password are required'},400)
    if(String(body.password).length<8)return out({error:'Password must be at least 8 characters'},400)
    const org=global?body.organization_id:cp.organization_id,branch=global?body.branch_id:cp.branch_id;if(!org||!branch)return out({error:'Organization and branch are required'},400)
    if(!global&&(org!==cp.organization_id||branch!==cp.branch_id))return out({error:'Forbidden'},403)
@@ -87,7 +87,7 @@ Deno.serve(async req=>{
   if(body.action==='update'){
    const org=global?body.organization_id:cp.organization_id,branch=global?body.branch_id:cp.branch_id
    if(!org||!branch)return out({error:'Organization and branch are required'},400)
-   if(!(await roleAllowed(body.role))||!String(body.full_name||'').trim())return out({error:'Full name and valid role are required'},400)
+   if(!(await roleAllowed(body.role,global?body.organization_id:cp.organization_id))||!String(body.full_name||'').trim())return out({error:'Full name and valid role are required'},400)
    if(!global&&(org!==cp.organization_id||branch!==cp.branch_id))return out({error:'Forbidden'},403)
    const {data:b}=await a.from('branches').select('id,organization_id,active').eq('id',branch).maybeSingle();if(!b?.active||b.organization_id!==org)return out({error:'Invalid branch'},400)
    if(body.role==='branch_admin'){const {data:x}=await a.from('profiles').select('id').eq('branch_id',branch).eq('role','branch_admin').eq('active',true).neq('id',id).limit(1);if(x?.length)return out({error:'This branch already has an active Branch Admin'},409)}
