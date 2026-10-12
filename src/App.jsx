@@ -7,6 +7,7 @@ import {SalesReviewPage} from './SalesReview'
 import {WorkforceManagement} from './WorkforceManagement'
 import {ReportsPage} from './Reports'
 import {EarningsPage} from './Earnings'
+import {GlobalCommissionPolicy} from './CommissionManagement'
 
 const roles={
  super_admin:'ዋና አስተዳዳሪ',admin:'ዋና አስተዳዳሪ',branch_admin:'የቅርንጫፍ አስተዳዳሪ',
@@ -59,7 +60,7 @@ function ProductsPage({user}){
   setCommissionBusy(true);setError('');
   try{
    const productName=selected.am||selected.en||selected.code||('Product '+selected.id);let rule=commissionRules[0];
-   const rulePayload={rule_type:ruleType,basis:commission.basis,price_dependency:'independent',sales_source:commission.salesSource,status:'active',active:true,updated_at:new Date().toISOString()};
+   const rulePayload={rule_type:ruleType,basis:commission.basis,price_dependency:'independent',sales_source:commission.salesSource,priority:10,status:'active',active:true,updated_at:new Date().toISOString()};
    if(!rule){const {data,error}=await supabase.from('commission_rules').insert({organization_id:targetOrg,product_id:selected.id,name:productName+' commission',code:'product_'+selected.id+'_commission',...rulePayload,created_by:user.id}).select().single();if(error)throw error;rule=data}
    else{const {data,error}=await supabase.from('commission_rules').update(rulePayload).eq('id',rule.id).select().single();if(error)throw error;rule={...rule,...data}}
    const versions=(rule.commission_rule_versions||[]).slice().sort((a,b)=>b.version-a.version);const latest=versions[0];const nextVersion=(latest?.version||0)+1;const start=commission.effective_from;
@@ -171,7 +172,7 @@ export default function App(){
    <main className="workspace-main mx-auto max-w-[1600px] p-3 md:p-4 xl:p-8">
     {page==='dashboard'&&<Dashboard user={user} global={global} branchAdmin={branchAdmin||(customRole&&!!user.branch_id&&!customRoleOrgWide)} setPage={setPage} items={items}/>}{page==='products'&&(global||branchAdmin||(customRole&&(hasPermCode('products.view')||hasPermCode('products.assign'))))&&<ProductsPage user={user}/>} {page==='branches'&&global&&<OrganizationsAdminPage currentUser={user}/>}
     {page==='users'&&(global||branchAdmin||(customRole&&(hasPermCode('users.create')||hasPermCode('users.manage'))))&&<UserManagement currentUser={user}/>} {page==='workforce'&&(global||branchAdmin||(customRole&&hasPermCode('attendance.manage')))&&<WorkforceManagement currentUser={user}/>} {page==='teams'&&(branchAdmin||(customRole&&(hasPermCode('teams.manage')||hasPermCode('teams.split'))))&&<TeamManagement currentUser={user}/>} 
-    {page==='sales'&&<SalesPage user={user}/>} {page==='commissions'&&(global||branchAdmin||(customRole&&(hasPermCode('commission.view')||hasPermCode('commission.set')||hasPermCode('sales.review'))))&&<SalesReviewPage user={user}/>} {page==='reports'&&<ReportsPage user={user}/>} {page==='earnings'&&(global||branchAdmin||role==='lead'||role==='lead_sales'||role==='assistant'||role==='driver'||customRole&&(hasPermCode('earnings.view')||hasPermCode('earnings.adjust')))&&<EarningsPage user={user}/>} {page==='profile'&&<ProfilePage user={user} onSaved={setUser}/>}
+    {page==='sales'&&<SalesPage user={user}/>} {page==='commissions'&&(global||branchAdmin||(customRole&&(hasPermCode('commission.view')||hasPermCode('commission.set')||hasPermCode('sales.review'))))&&<><GlobalCommissionPolicy user={user}/><SalesReviewPage user={user}/></>} {page==='reports'&&<ReportsPage user={user}/>} {page==='earnings'&&(global||branchAdmin||role==='lead'||role==='lead_sales'||role==='assistant'||role==='driver'||customRole&&(hasPermCode('earnings.view')||hasPermCode('earnings.adjust')))&&<EarningsPage user={user}/>} {page==='profile'&&<ProfilePage user={user} onSaved={setUser}/>}
    </main>
   </div>
  </div>
