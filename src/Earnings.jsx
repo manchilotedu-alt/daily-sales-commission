@@ -1,14 +1,14 @@
 import React,{useEffect,useMemo,useState} from 'react'
 import {supabase} from './lib/supabase'
 const money=n=>Number(n||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})
-const statusLabel={calculated:'ተቆጥሯል',finance_review:'የፋይናንስ ግምገማ',submitted:'ቀርቧል',approved:'ተፈቅዷል',paid:'ተከፍሏል',held:'ታግዷል'}
+const statusLabel={open:'ክፍት',calculating:'በስሌት ላይ',calculated:'ተቆጥሯል',finance_review:'የፋይናንስ ግምገማ',submitted:'ቀርቧል',approved:'ተፈቅዷል',held:'ታግዷል',paid:'ተከፍሏል',partially_paid:'በከፊል ተከፍሏል',fully_paid:'ሙሉ ተከፍሏል',locked:'ተቆልፏል'}
 export function EarningsPage({user}){
  const [periods,setPeriods]=useState([]),[selected,setSelected]=useState(''),[rows,setRows]=useState([]),[disputes,setDisputes]=useState([]),[payments,setPayments]=useState([]),[audits,setAudits]=useState([]),[loading,setLoading]=useState(true),[error,setError]=useState(''),[action,setAction]=useState(''),[payAmount,setPayAmount]=useState(''),[payReference,setPayReference]=useState(''),[disputeReason,setDisputeReason]=useState(''),[selectedRow,setSelectedRow]=useState('')
  const global=['super_admin','admin'].includes(user.role), finance=['finance_officer','finance'].includes(user.role), canManage=global||user.role==='branch_admin'||finance
  const load=async()=>{setLoading(true);setError('');try{
-  const {data:p,error:pe}=await supabase.from('commission_periods').select('*').eq('organization_id',user.organization_id).order('period_start',{ascending:false});if(pe)throw pe;setPeriods(p||[]);const active=selected||(p?.[0]?.id||'');if(!selected&&active)setSelected(active);if(!active)return
+  const {data:p,error:pe}=await supabase.from('commission_periods').select('*').eq('organization_id',user.organization_id).order('period_start',{ascending:false});if(pe)throw pe;setPeriods(p||[]);const active=selected||(p?.[0]?.id||'');if(!selected&&active)setSelected(active);if(!active){setRows([]);setDisputes([]);setPayments([]);setAudits([]);return}
   let q=supabase.from('employee_period_earnings').select('*,profiles:employee_id(full_name,role,branch_id)').eq('commission_period_id',active)
-  if(!global&&!finance)q=q.eq('employee_id',user.id);if(user.role==='branch_admin'||finance)q=q.eq('profiles.branch_id',user.branch_id)
+  if(!global&&!finance&&user.role!=='branch_admin')q=q.eq('employee_id',user.id);if(user.role==='branch_admin'||finance)q=q.eq('profiles.branch_id',user.branch_id)
   const {data:e,error:ee}=await q.order('net_payable',{ascending:false});if(ee)throw ee;setRows(e||[])
   const ids=(e||[]).map(x=>x.id);if(ids.length){const {data:d,error:de}=await supabase.from('disputes').select('*').in('employee_period_earnings_id',ids).order('submitted_at',{ascending:false});if(de)throw de;setDisputes(d||[]);const {data:pay,error:payErr}=await supabase.from('payments').select('*,payment_transactions(*)').in('employee_period_earnings_id',ids);if(payErr)throw payErr;setPayments(pay||[])}else{setDisputes([]);setPayments([])}
   if(global){const {data:a,error:ae}=await supabase.from('audit_logs').select('*').eq('organization_id',user.organization_id).order('created_at',{ascending:false}).limit(100);if(ae)throw ae;setAudits(a||[])}
