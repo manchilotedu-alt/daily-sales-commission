@@ -80,7 +80,7 @@ export function SalesReviewPage({user}){
       </td></tr>}
      </React.Fragment>)}
      {!loading&&!sales.length&&<tr><td colSpan="8" className="p-10 text-center text-zinc-500">ምንም የሽያጭ መዝገብ የለም።</td></tr>}
-     {loading&&<tr><td colSpan="7" className="p-10 text-center text-zinc-500">በመጫን ላይ…</td></tr>}
+     {loading&&<tr><td colSpan="8" className="p-10 text-center text-zinc-500">በመጫን ላይ…</td></tr>}
     </tbody>
    </table>
   </div>
