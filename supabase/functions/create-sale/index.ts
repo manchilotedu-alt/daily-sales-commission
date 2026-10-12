@@ -176,7 +176,7 @@ Deno.serve(async req=>{
      candidates.push({r,v})
     }
    }
-   candidates.sort((a,b)=>Number(a.r.priority||100)-Number(b.r.priority||100)||Number(b.v.version)-Number(a.v.version))
+   candidates.sort((a,b)=>Number(b.r.product_variant_id!=null)-Number(a.r.product_variant_id!=null)||Number(b.r.product_id!=null)-Number(a.r.product_id!=null)||Number(a.r.priority||100)-Number(b.r.priority||100)||Number(b.v.version)-Number(a.v.version))
    return candidates[0]||null
   }
 
