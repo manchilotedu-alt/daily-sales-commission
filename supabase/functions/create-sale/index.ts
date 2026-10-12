@@ -172,7 +172,7 @@ Deno.serve(async req=>{
     if(r.product_id!=null && Number(r.product_id)!==Number(line.product_id))continue
     if(r.product_variant_id!=null && String(r.product_variant_id)!==String(line.product_variant_id||''))continue
     for(const v of (r.commission_rule_versions||[])){
-     if(v.status!=='active'||String(v.effective_from).slice(0,10)>saleDate||(v.effective_to&&String(v.effective_to).slice(0,10)<saleDate))continue
+     if(!['active','approved','expired'].includes(v.status)||String(v.effective_from).slice(0,10)>saleDate||(v.effective_to&&String(v.effective_to).slice(0,10)<saleDate))continue
      candidates.push({r,v})
     }
    }
