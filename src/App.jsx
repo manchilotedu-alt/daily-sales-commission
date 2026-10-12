@@ -39,6 +39,7 @@ function errorText(e){
 
 function ProductsPage({user}){
  const global=['super_admin','admin'].includes(user?.role)
+ const superAdmin=user?.role==='super_admin'
  const branchAdmin=user?.role==='branch_admin'
  const [orgs,setOrgs]=useState([]),[branches,setBranches]=useState([]),[selectedOrg,setSelectedOrg]=useState(user?.organization_id||''),[rows,setRows]=useState([]),[assigned,setAssigned]=useState([]),[selected,setSelected]=useState(null),[variants,setVariants]=useState([]),[prices,setPrices]=useState([])
  const [error,setError]=useState(''),[form,setForm]=useState({code:'',am:'',en:'',rate:''}),[variant,setVariant]=useState({code:'',am:'',en:'',unit:''}),[price,setPrice]=useState({value:'',from:''}),[saving,setSaving]=useState(false)
@@ -78,9 +79,9 @@ function ProductsPage({user}){
    await loadCommission(selected.id);setCommission(prev=>({...prev,value:''}))
   }catch(e){setError(e.message||'የኮሚሽን ስሪት መመዝገብ አልተቻለም።')}finally{setCommissionBusy(false)}
  }
- const targetOrg=global?selectedOrg:user?.organization_id
+ const targetOrg=superAdmin?selectedOrg:user?.organization_id
  const ownBranch=user?.branch_id||''
- const loadOrgs=async()=>{if(!global)return;const {data,error}=await supabase.from('organizations').select('id,name,code,active').eq('active',true).order('name');if(error)setError(error.message);else setOrgs(data||[])}
+ const loadOrgs=async()=>{if(!superAdmin)return;const {data,error}=await supabase.from('organizations').select('id,name,code,active').eq('active',true).order('name');if(error)setError(error.message);else setOrgs(data||[])}
  const loadBranches=async()=>{if(!targetOrg){setBranches([]);return}let q=supabase.from('branches').select('id,name,code,active,organization_id').eq('organization_id',targetOrg).eq('active',true).order('name');if(branchAdmin&&ownBranch)q=q.eq('id',ownBranch);const {data,error}=await q;if(error)setError(error.message);else setBranches(data||[])}
  const load=async()=>{setError('');if(!targetOrg){setRows([]);return}const {data,error}=await supabase.from('products').select('id,code,en,am,rate,active,organization_id').eq('organization_id',targetOrg).order('id');if(error)setError(error.message||'ምርቶችን ማምጣት አልተቻለም።');else setRows(data||[])}
  const loadAssignments=async productId=>{if(!productId){setAssigned([]);return}let q=supabase.from('product_branch_assignments').select('id,product_id,branch_id,organization_id,active,assigned_at,branches(id,name,code)').eq('product_id',productId).eq('active',true);const {data,error}=await q;if(error)setError(error.message);else setAssigned(data||[])}
@@ -93,7 +94,7 @@ function ProductsPage({user}){
  const assign=async()=>{if(!branchAdmin||!selected)return;const existing=assigned.find(a=>a.branch_id===ownBranch);if(existing){setError('ይህ ምርት በእርስዎ ቅርንጫፍ ውስጥ አስቀድሞ ተመድቧል።');return}const {error}=await supabase.from('product_branch_assignments').insert({product_id:selected.id,organization_id:targetOrg,branch_id:ownBranch,active:true,assigned_by:user.id});if(error)setError(error.message);else{await openProduct(selected)}}
  const toggle=async r=>{if(!global)return;const {error}=await supabase.from('products').update({active:!r.active,updated_at:new Date().toISOString()}).eq('id',r.id).eq('organization_id',targetOrg);if(error)setError(error.message);else load()}
  return <section className="space-y-5"><div><h2 className="text-2xl font-black">ምርቶች</h2><p className="text-sm text-zinc-500">{global?'Super Admin ምርት፣ Variant፣ ዋጋ እና የምርት መረጃን ይቆጣጠራል።':'ከSuper Admin የተፈቀዱ ምርቶችን ወደ ራስዎ ቅርንጫፍ ያስገቡ።'}</p></div>
- {global&&<div className="rounded-2xl border bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900"><label className="mb-2 block text-sm font-semibold">ድርጅት ምረጥ</label><select className="input" value={selectedOrg} onChange={e=>{setSelectedOrg(e.target.value);setSelected(null)}}><option value="">-- ድርጅት ምረጥ --</option>{orgs.map(o=><option key={o.id} value={o.id}>{o.name}{o.code?' ('+o.code+')':''}</option>)}</select></div>}
+ {superAdmin&&<div className="rounded-2xl border bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900"><label className="mb-2 block text-sm font-semibold">ድርጅት ምረጥ</label><select className="input" value={selectedOrg} onChange={e=>{setSelectedOrg(e.target.value);setSelected(null)}}><option value="">-- ድርጅት ምረጥ --</option>{orgs.map(o=><option key={o.id} value={o.id}>{o.name}{o.code?' ('+o.code+')':''}</option>)}</select></div>}
  {branchAdmin&&<div className="rounded-2xl border bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900"><div className="text-sm text-zinc-500">የእርስዎ ቅርንጫፍ</div><div className="mt-1 font-bold">{branches[0]?.name||'ቅርንጫፍ አልተመደበም'}</div></div>}
  {error&&<div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-600">{error}</div>}
  {global&&targetOrg&&<form onSubmit={add} className="grid gap-3 rounded-2xl border bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900 md:grid-cols-5"><input className="input" placeholder="የምርት ኮድ" value={form.code} onChange={e=>setForm({...form,code:e.target.value})}/><input className="input" placeholder="ስም (አማርኛ)" value={form.am} onChange={e=>setForm({...form,am:e.target.value})}/><input className="input" placeholder="Product name" value={form.en} onChange={e=>setForm({...form,en:e.target.value})}/><input className="input" type="number" min="0" step="0.01" required placeholder="መነሻ ዋጋ" value={form.rate} onChange={e=>setForm({...form,rate:e.target.value})}/><button className="btn" disabled={saving}>{saving?'በመጨመር ላይ...':'ምርት ጨምር'}</button></form>}
