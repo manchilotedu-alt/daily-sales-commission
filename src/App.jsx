@@ -64,10 +64,11 @@ function ProductsPage({user}){
    else{const {data,error}=await supabase.from('commission_rules').update(rulePayload).eq('id',rule.id).select().single();if(error)throw error;rule={...rule,...data}}
    const versions=(rule.commission_rule_versions||[]).slice().sort((a,b)=>b.version-a.version);const latest=versions[0];const nextVersion=(latest?.version||0)+1;const start=commission.effective_from;
    if(latest&&start<=String(latest.effective_from).slice(0,10))throw new Error('አዲሱ የሚጀምርበት ቀን ከቀድሞው ስሪት ቀን በኋላ መሆን አለበት።');
-   if(latest){const {error}=await supabase.from('commission_rule_versions').update({effective_to:new Date(start+'T00:00:00').toISOString(),status:'expired'}).eq('id',latest.id);if(error)throw error}
-   const {data:newVersion,error:insertError}=await supabase.from('commission_rule_versions').insert({commission_rule_id:rule.id,version:nextVersion,effective_from:new Date(start+'T00:00:00').toISOString(),fixed_amount:method==='fixed'?value:null,rate_percent:method==='percentage'?value:null,status:'active',created_by:user.id,submitted_by:user.id,submitted_at:new Date().toISOString(),approved_by:user.id,approved_at:new Date().toISOString()}).select().single();
+   const {data:newVersion,error:insertError}=await supabase.from('commission_rule_versions').insert({commission_rule_id:rule.id,version:nextVersion,effective_from:new Date(start+'T00:00:00').toISOString(),fixed_amount:method==='fixed'?value:null,rate_percent:method==='percentage'?value:null,rule_type:ruleType,basis:commission.basis,sales_source:commission.salesSource,status:'draft',created_by:user.id,submitted_by:user.id,submitted_at:new Date().toISOString(),approved_by:user.id,approved_at:new Date().toISOString()}).select().single();
    if(insertError)throw insertError;
    if(method==='tiered'){const rows=cleanTiers.map(t=>({commission_rule_version_id:newVersion.id,min_value:t.min,max_value:t.max,rate_percent:t.method==='percentage'?t.value:null,fixed_amount:t.method==='fixed'?t.value:null,tier_order:t.tier_order}));const {error:tierError}=await supabase.from('commission_rule_tiers').insert(rows);if(tierError)throw tierError}
+   if(latest){const {error}=await supabase.from('commission_rule_versions').update({effective_to:new Date(start+'T00:00:00').toISOString(),status:'expired'}).eq('id',latest.id);if(error)throw error}
+   const {error:activateError}=await supabase.from('commission_rule_versions').update({status:'active'}).eq('id',newVersion.id);if(activateError)throw activateError
    await loadCommission(selected.id);setCommission(prev=>({...prev,value:''}))
   }catch(e){setError(e.message||'የኮሚሽን ስሪት መመዝገብ አልተቻለም።')}finally{setCommissionBusy(false)}
  }
