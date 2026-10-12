@@ -60,11 +60,13 @@ function ProductsPage({user}){
   setCommissionBusy(true);setError('');
   try{
    const productName=selected.am||selected.en||selected.code||('Product '+selected.id);let rule=commissionRules[0];
+   const versions=(rule?.commission_rule_versions||[]).slice().sort((a,b)=>b.version-a.version);const latest=versions[0];const nextVersion=(latest?.version||0)+1;const start=commission.effective_from;
+   // Validate the effective date before changing the parent rule to avoid partial updates.
+   if(!start)throw new Error('የሚጀምርበትን ቀን ያስገቡ።');
+   if(latest&&start<=String(latest.effective_from).slice(0,10))throw new Error('አዲሱ የሚጀምርበት ቀን ከቀድሞው ስሪት ቀን በኋላ መሆን አለበት።');
    const rulePayload={rule_type:ruleType,basis:commission.basis,price_dependency:'independent',sales_source:commission.salesSource,priority:10,status:'active',active:true,updated_at:new Date().toISOString()};
    if(!rule){const {data,error}=await supabase.from('commission_rules').insert({organization_id:targetOrg,product_id:selected.id,name:productName+' commission',code:'product_'+selected.id+'_commission',...rulePayload,created_by:user.id}).select().single();if(error)throw error;rule=data}
    else{const {data,error}=await supabase.from('commission_rules').update(rulePayload).eq('id',rule.id).select().single();if(error)throw error;rule={...rule,...data}}
-   const versions=(rule.commission_rule_versions||[]).slice().sort((a,b)=>b.version-a.version);const latest=versions[0];const nextVersion=(latest?.version||0)+1;const start=commission.effective_from;
-   if(latest&&start<=String(latest.effective_from).slice(0,10))throw new Error('አዲሱ የሚጀምርበት ቀን ከቀድሞው ስሪት ቀን በኋላ መሆን አለበት።');
    // Use UTC boundaries and close the previous version before the new effective date.
    const effectiveFrom=new Date(start+'T00:00:00.000Z').toISOString();
    const previousEffectiveTo=new Date(Date.parse(effectiveFrom)-1).toISOString();
