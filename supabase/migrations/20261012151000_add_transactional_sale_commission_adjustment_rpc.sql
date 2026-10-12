@@ -58,9 +58,9 @@ begin
     select 1 from public.commission_periods cp
     where cp.organization_id = v_sale.organization_id
       and v_sale.sale_date between cp.period_start and cp.period_end
-      and cp.status in ('submitted','approved','locked')
+      and cp.status in ('calculating','finance_review','submitted','approved','locked')
   ) then
-    raise exception 'The commission period is submitted, approved, or locked; reopen it before adjusting this sale';
+    raise exception 'The commission period is already being calculated or under finance review/submitted/approved/locked; reopen it before adjusting this sale';
   end if;
 
   v_base := round(coalesce(v_sale.gross_commission,0),2);
@@ -76,7 +76,7 @@ begin
   select round(coalesce(sum(allocated_commission),0),2), count(*)
     into v_alloc_sum, v_count
     from public.sale_commission_allocations where sale_id = p_sale_id;
-  if v_count = 0 and v_base > 0 then raise exception 'Commission allocation is missing'; end if;
+  if v_count = 0 and v_final > 0 then raise exception 'Commission allocation is missing'; end if;
   if abs(coalesce(v_alloc_sum,0)-v_base) > 0.01 then raise exception 'Allocation total does not match the current commission'; end if;
 
   select round(coalesce(sum(commission_amount),0),2), count(*)
