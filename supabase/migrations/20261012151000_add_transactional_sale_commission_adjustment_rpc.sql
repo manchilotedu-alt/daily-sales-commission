@@ -9,7 +9,7 @@ create or replace function public.apply_sale_commission_adjustment(
   p_reason text default null
 ) returns jsonb
 language plpgsql
-security definer
+security invoker
 set search_path = public
 as $$
 declare
