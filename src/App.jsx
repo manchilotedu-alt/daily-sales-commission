@@ -60,7 +60,7 @@ function ProductsPage({user}){
   }
   setCommissionBusy(true);setError('');
   try{
-   const productName=selected.am||selected.en||selected.code||('Product '+selected.id);let rule=commissionRules[0];
+   const productName=selected.am||selected.en||selected.code||('Product '+selected.id);let rule=commissionRules.find(x=>x.status==='active')||commissionRules[0];
    const versions=(rule?.commission_rule_versions||[]).slice().sort((a,b)=>b.version-a.version);const latest=versions[0];const nextVersion=(latest?.version||0)+1;const start=commission.effective_from;
    // Validate the effective date before changing the parent rule to avoid partial updates.
    if(!start)throw new Error('የሚጀምርበትን ቀን ያስገቡ።');
