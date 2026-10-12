@@ -88,14 +88,17 @@ export function SalesReviewPage({user}){
 }
 
 function SaleDetails({sale}){
- const [items,setItems]=useState([]),[alloc,setAlloc]=useState([]),[loading,setLoading]=useState(true)
+ const [items,setItems]=useState([]),[alloc,setAlloc]=useState([]),[teamVersion,setTeamVersion]=useState(null),[loading,setLoading]=useState(true)
  useEffect(()=>{
   let live=true
   ;(async()=>{
    setLoading(true)
-   const [ir,ar]=await Promise.all([
+   const [ir,ar,tr]=await Promise.all([
     supabase.from('sale_items').select('id,product_id,product_variant_id,qty,rate,line_amt,unit_price_snapshot,sales_value,system_sales_value,commission_sales_source,commission_amount').eq('sale_id',sale.id),
-    supabase.from('sale_commission_allocations').select('id,employee_id,role_code,split_percentage,allocated_commission,team_assignment_id,team_split_version_id').eq('sale_id',sale.id)
+    supabase.from('sale_commission_allocations').select('id,employee_id,role_code,split_percentage,allocated_commission,team_assignment_id,team_split_version_id,employee_position').eq('sale_id',sale.id),
+    sale.team_split_version_id
+     ?supabase.from('team_split_versions').select('id,version,status,effective_from,effective_to,approved_at,returned_reason').eq('id',sale.team_split_version_id).maybeSingle()
+     :Promise.resolve({data:null,error:null})
    ])
    const itemRows=ir.data||[]
    const allocationRows=ar.data||[]
@@ -114,7 +117,7 @@ function SaleDetails({sale}){
    const variantMap=new Map((vr.data||[]).map(x=>[Number(x.id),x]))
    const displayItems=itemRows.map(x=>({...x,productName:productMap.get(Number(x.product_id))?.am||productMap.get(Number(x.product_id))?.en||String(x.product_id),variant:variantMap.get(Number(x.product_variant_id))}))
    const displayAllocations=allocationRows.map(a=>({...a,employeeName:employeeMap.get(a.employee_id)?.full_name||''}))
-   if(live){setItems(displayItems);setAlloc(displayAllocations);setLoading(false)}
+   if(live){setItems(displayItems);setAlloc(displayAllocations);setTeamVersion(tr.data||null);setLoading(false)}
   })()
   return()=>{live=false}
  },[sale.id])
@@ -125,7 +128,7 @@ function SaleDetails({sale}){
    <Info label="ጠቅላላ የሲስተም ሽያጭ" value={money(sale.system_sales_total)+' ብር'}/>
    <Info label="የሲስተም ማጣቀሻ" value={sale.system_sales_reference||'—'}/>
    <Info label="ጠቅላላ ኮሚሽን" value={money(sale.gross_commission)+' ብር'}/>
-   <Info label="የቡድን ስፕሊት" value={sale.team_split_version_id?'የተፈቀደ ስሪት':'አልተያያዘም'}/>
+   <Info label="የቡድን ስፕሊት" value={teamVersion?(`v${teamVersion.version} · ${teamVersion.status==='approved'?'ተፈቅዷል':teamVersion.status==='active'?'በስራ ላይ':teamVersion.status==='pending_approval'?'ማጽደቅ በመጠባበቅ ላይ':teamVersion.status==='draft'?'ረቂቅ':teamVersion.status==='expired'?'ጊዜው አልፏል':teamVersion.status==='archived'?'ተቀምጧል':teamVersion.status}`):sale.team_split_version_id?'የስሪት መረጃ አልተገኘም':'አልተያያዘም'}/>
   </div>
   <div className="overflow-x-auto rounded-xl border dark:border-zinc-800">
    <table className="w-full text-sm"><thead><tr className="border-b dark:border-zinc-800"><th className="p-2 text-left">ምርት</th><th className="p-2 text-left">መጠን/ቅጽ</th><th className="p-2 text-right">ብዛት</th><th className="p-2 text-right">የአንዱ ዋጋ</th><th className="p-2 text-right">የደረሰኝ ሽያጭ</th><th className="p-2 text-right">የሲስተም ሽያጭ</th><th className="p-2 text-left">የኮሚሽን መነሻ</th><th className="p-2 text-right">ኮሚሽን</th></tr></thead>
@@ -135,7 +138,7 @@ function SaleDetails({sale}){
   </div>
   <div>
    <h4 className="mb-2 font-bold">የኮሚሽን ክፍፍል</h4>
-   <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{alloc.map(a=><div key={a.id} className="rounded-xl border p-3 dark:border-zinc-800"><div className="font-bold">{a.employeeName||'ስም አልተገኘም'}</div><div className="text-xs text-zinc-500">{roles[a.role_code]||a.role_code}</div>{!a.employeeName&&a.employee_id&&<div className="mt-1 break-all text-xs text-zinc-400">ID: {a.employee_id}</div>}<div className="mt-2 font-bold">{money(a.allocated_commission)} ብር</div><div className="text-xs text-zinc-500">{a.split_percentage}%</div></div>)}</div>
+   <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{alloc.map(a=><div key={a.id} className="rounded-xl border p-3 dark:border-zinc-800"><div className="font-bold">{a.employeeName||'ስም አልተገኘም'}</div><div className="text-xs text-zinc-500">{roles[a.role_code]||a.role_code}</div>{!a.employeeName&&a.employee_id&&<div className="mt-1 break-all text-xs text-zinc-400">ID: {a.employee_id}</div>}<div className="mt-2 font-bold">{money(a.allocated_commission)} ብር</div><div className="text-xs text-zinc-500">{a.split_percentage}% · ቦታ {a.employee_position||1}</div>{a.team_split_version_id&&<div className="mt-1 text-xs text-zinc-400">የክፍፍል ስሪት ተመዝግቧል</div>}</div>)}</div>
   </div>
   {sale.status==='rejected'&&<div className="rounded-xl bg-rose-500/10 p-3 text-sm text-rose-400"><b>የመመለሻ ምክንያት፦</b> {sale.reject_reason||'—'}</div>}
   {sale.verified&&<div className="text-xs text-zinc-500">ያረጋገጠው፦ {sale.verified.full_name||'—'} {sale.verified_at?'• '+new Date(sale.verified_at).toLocaleString():''}</div>}
