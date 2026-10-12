@@ -5,7 +5,7 @@ const roleLabels={lead:'መሪ ሻጭ',lead_sales:'መሪ ሻጭ',assistant:'ረ
 const normalize= v=>String(v||'').trim()
 
 export function SalesPage({user}){
- const [products,setProducts]=useState([]),[variants,setVariants]=useState([]),[priceVersions,setPriceVersions]=useState([]),[staff,setStaff]=useState([]),[items,setItems]=useState([]),[teams,setTeams]=useState([]),[teamId,setTeamId]=useState(''),[receiptReference,setReceiptReference]=useState(''),[saleDate,setSaleDate]=useState(new Date().toISOString().slice(0,10))
+ const [products,setProducts]=useState([]),[variants,setVariants]=useState([]),[priceVersions,setPriceVersions]=useState([]),[staff,setStaff]=useState([]),[items,setItems]=useState([]),[teams,setTeams]=useState([]),[teamId,setTeamId]=useState(''),[receiptReference,setReceiptReference]=useState(''),[systemSalesReference,setSystemSalesReference]=useState(''),[systemSalesValue,setSystemSalesValue]=useState(''),[saleDate,setSaleDate]=useState(new Date().toISOString().slice(0,10))
  const [leadId,setLeadId]=useState(user.role==='lead'||user.role==='lead_sales'?user.id:''),[assistantId,setAssistantId]=useState(user.role==='assistant'?user.id:''),[driverId,setDriverId]=useState(user.role==='driver'?user.id:'')
  const [productId,setProductId]=useState(''),[variantId,setVariantId]=useState(''),[qty,setQty]=useState(1),[busy,setBusy]=useState(false),[error,setError]=useState(''),[ok,setOk]=useState('')
  const canSubmit=user.role==='branch_admin'
@@ -58,11 +58,13 @@ export function SalesPage({user}){
   setError('');setOk('')
   const n=Number(qty)
   if(!selected||!Number.isInteger(n)||n<1)return setError('ምርት እና ትክክለኛ ብዛት ይምረጡ።')
+  const systemValue=Number(systemSalesValue)
+  if(systemSalesValue===''||!Number.isFinite(systemValue)||systemValue<0)return setError('ለዚህ እቃ የውጭ ሲስተም ሽያጭ ዋጋ ያስገቡ።')
   if(selectedVariants.length&&!selectedVariant)return setError('የምርቱን መጠን ይምረጡ።')
   const key=selected.id+':'+(variantId||'')
   const rate=resolveRate(selected,selectedVariant)
-  setItems(prev=>{const i=prev.findIndex(x=>x.key===key);if(i<0)return [...prev,{key,product_id:selected.id,product_variant_id:variantId||null,name:displayName,qty:n,rate,salesValue:n*rate}];const a=[...prev];a[i]={...a[i],qty:a[i].qty+n,salesValue:(a[i].qty+n)*a[i].rate};return a})
-  setProductId('');setVariantId('');setQty(1)
+  setItems(prev=>{const i=prev.findIndex(x=>x.key===key);if(i<0)return [...prev,{key,product_id:selected.id,product_variant_id:variantId||null,name:displayName,qty:n,rate,salesValue:n*rate,systemSalesValue:systemValue}];const a=[...prev];a[i]={...a[i],qty:a[i].qty+n,salesValue:(a[i].qty+n)*a[i].rate,systemSalesValue:a[i].systemSalesValue+systemValue};return a})
+  setProductId('');setVariantId('');setQty(1);setSystemSalesValue('')
  }
  const submit=async e=>{
   e.preventDefault();setBusy(true);setError('');setOk('')
@@ -70,11 +72,12 @@ export function SalesPage({user}){
    if(!canSubmit)throw new Error('ይህ ሚና ሽያጭ ማስገባት አይችልም።')
    if(!teamId)throw new Error('የሽያጭ ቡድን ይምረጡ።')
    if(!receiptReference.trim())throw new Error('የደረሰኝ ቁጥር / የሽያጭ ማጣቀሻ ያስገቡ።')
+   if(!systemSalesReference.trim())throw new Error('የውጭ ሲስተም ማጣቀሻ ያስገቡ።')
    if(!items.length)throw new Error('ቢያንስ አንድ የሽያጭ እቃ ያስገቡ።')
-   const {data,error}=await supabase.functions.invoke('create-sale',{body:{sale_date:saleDate,team_id:teamId,receipt_reference:receiptReference.trim(),items:items.map(x=>({product_id:x.product_id,product_variant_id:x.product_variant_id,qty:x.qty}))}})
+   const {data,error}=await supabase.functions.invoke('create-sale',{body:{sale_date:saleDate,team_id:teamId,receipt_reference:receiptReference.trim(),system_sales_reference:systemSalesReference.trim(),items:items.map(x=>({product_id:x.product_id,product_variant_id:x.product_variant_id,qty:x.qty,system_sales_value:x.systemSalesValue}))}})
    if(error)throw error
    if(data?.error)throw new Error(data.error)
-   setItems([]);setReceiptReference('');setOk('ሽያጩ ተመዝግቦ ለማረጋገጫ ተልኳል።')
+   setItems([]);setReceiptReference('');setSystemSalesReference('');setSystemSalesValue('');setOk('ሽያጩ ተመዝግቦ ለማረጋገጫ ተልኳል።')
   }catch(e){setError(e.message)}finally{setBusy(false)}
  }
  const staffByRole=r=>staff.filter(x=>x.role===r||((r==='lead'||r==='lead_sales')&&['lead','lead_sales'].includes(x.role)))
@@ -87,19 +90,21 @@ export function SalesPage({user}){
     <label className="text-sm">የሽያጭ ቀን<input className="input mt-1" type="date" value={saleDate} onChange={e=>setSaleDate(e.target.value)} disabled={items.length>0} title={items.length?'የቀን ለውጥ ለማድረግ መጀመሪያ የሽያጭ ዝርዝሩን ባዶ ያድርጉ።':''} required/></label>
     <label className="text-sm">የሽያጭ ቡድን<select className="input mt-1" value={teamId} onChange={e=>setTeamId(e.target.value)} required><option value="">ቡድን ይምረጡ</option>{teams.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></label>
     <label className="text-sm">የደረሰኝ ቁጥር / ማጣቀሻ<input className="input mt-1" type="text" maxLength="120" value={receiptReference} onChange={e=>setReceiptReference(e.target.value)} placeholder="ለምሳሌ: RCP-000123" required/></label>
+    <label className="text-sm">የውጭ ሲስተም ማጣቀሻ<input className="input mt-1" type="text" maxLength="120" value={systemSalesReference} onChange={e=>setSystemSalesReference(e.target.value)} placeholder="የድርጅቱ ሲስተም ቁጥር" required/></label>
     <label className="text-sm">ምርት<select className="input mt-1" value={productId} onChange={e=>{setProductId(e.target.value);setVariantId('')}}><option value="">ምርት ይምረጡ</option>{products.map(p=><option key={p.id} value={p.id}>{p.am||p.en}</option>)}</select></label>
     {selectedVariants.length>0&&<label className="text-sm">መጠን / ቫሪያንት<select className="input mt-1" value={variantId} onChange={e=>setVariantId(e.target.value)}><option value="">መጠን ይምረጡ</option>{selectedVariants.map(v=><option key={v.id} value={v.id}>{v.name_am||v.name_en}{v.unit?' · '+v.unit:''}</option>)}</select></label>}
     <label className="text-sm">ብዛት<input className="input mt-1" type="number" min="1" step="1" value={qty} onChange={e=>setQty(e.target.value)}/></label>
+    <label className="text-sm">የውጭ ሲስተም የዚህ እቃ ሽያጭ ዋጋ<input className="input mt-1" type="number" min="0" step="0.01" value={systemSalesValue} onChange={e=>setSystemSalesValue(e.target.value)} placeholder="ለምሳሌ: 1250.00" required/></label>
     <div className="flex items-end"><button type="button" onClick={add} className="btn w-full">ወደ ዝርዝር ጨምር</button></div>
    </div>
 
    <div className="overflow-x-auto rounded-2xl border bg-white dark:border-zinc-800 dark:bg-zinc-900">
-    <table className="w-full text-sm"><thead><tr className="border-b dark:border-zinc-800"><th className="p-3 text-left">ምርት</th><th className="p-3">ብዛት</th><th className="p-3">የአንድ ዋጋ</th><th className="p-3">የሽያጭ ዋጋ</th><th className="p-3"></th></tr></thead><tbody>
-     {items.map(x=><tr key={x.key} className="border-b last:border-0 dark:border-zinc-800"><td className="p-3">{x.name}</td><td className="p-3 text-center">{x.qty}</td><td className="p-3 text-right">{x.rate.toLocaleString()} ብር</td><td className="p-3 text-right">{x.salesValue.toLocaleString()} ብር</td><td className="p-3 text-center"><button type="button" className="text-rose-500" onClick={()=>setItems(a=>a.filter(i=>i.key!==x.key))}>ሰርዝ</button></td></tr>)}
-     {!items.length&&<tr><td colSpan="5" className="p-8 text-center text-zinc-500">የሽያጭ ዝርዝር እዚህ ይታያል።</td></tr>}
-    </tbody>{items.length&&<tfoot><tr><td className="p-3 font-bold">ጠቅላላ</td><td className="p-3 text-center font-bold">{totalQuantity}</td><td/><td className="p-3 text-right font-black">{total.toLocaleString()} ብር</td><td/></tr></tfoot>}</table>
+    <table className="w-full text-sm"><thead><tr className="border-b dark:border-zinc-800"><th className="p-3 text-left">ምርት</th><th className="p-3">ብዛት</th><th className="p-3">የአንድ ዋጋ</th><th className="p-3">የደረሰኝ ሽያጭ</th><th className="p-3">የሲስተም ሽያጭ</th><th className="p-3"></th></tr></thead><tbody>
+     {items.map(x=><tr key={x.key} className="border-b last:border-0 dark:border-zinc-800"><td className="p-3">{x.name}</td><td className="p-3 text-center">{x.qty}</td><td className="p-3 text-right">{x.rate.toLocaleString()} ብር</td><td className="p-3 text-right">{x.salesValue.toLocaleString()} ብር</td><td className="p-3 text-right">{x.systemSalesValue.toLocaleString()} ብር</td><td className="p-3 text-center"><button type="button" className="text-rose-500" onClick={()=>setItems(a=>a.filter(i=>i.key!==x.key))}>ሰርዝ</button></td></tr>)}
+     {!items.length&&<tr><td colSpan="6" className="p-8 text-center text-zinc-500">የሽያጭ ዝርዝር እዚህ ይታያል።</td></tr>}
+    </tbody>{items.length&&<tfoot><tr><td className="p-3 font-bold">ጠቅላላ ደረሰኝ ሽያጭ</td><td className="p-3 text-center font-bold">{totalQuantity}</td><td/><td className="p-3 text-right font-black">{total.toLocaleString()} ብር</td><td className="p-3 text-right text-zinc-500">—</td><td/></tr></tfoot>}</table>
    </div>
-   <button disabled={busy||!canSubmit||!items.length||!teamId||!receiptReference.trim()} className="btn w-full md:w-auto">{busy?'በመላክ ላይ…':canSubmit?'ሽያጭ አስገባ':'ሽያጭ ማስገባት የቅርንጫፍ አስተዳዳሪ ብቻ ይችላል'}</button>
+   <button disabled={busy||!canSubmit||!items.length||!teamId||!receiptReference.trim()||!systemSalesReference.trim()} className="btn w-full md:w-auto">{busy?'በመላክ ላይ…':canSubmit?'ሽያጭ አስገባ':'ሽያጭ ማስገባት የቅርንጫፍ አስተዳዳሪ ብቻ ይችላል'}</button>
   </form>
  </section>
 }
