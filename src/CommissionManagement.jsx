@@ -30,9 +30,13 @@ export function GlobalCommissionPolicy({user,onOpenEarnings}){
    let current=rule
    if(!current){const {data,error}=await supabase.from('commission_rules').insert({organization_id:user.organization_id,product_id:null,product_variant_id:null,branch_id:null,code:'organization_default_commission',...payload,created_by:user.id}).select().single();if(error)throw error;current=data}
    else{const {data,error}=await supabase.from('commission_rules').update(payload).eq('id',current.id).select().single();if(error)throw error;current={...current,...data}}
-   const {data:v,error:ve}=await supabase.from('commission_rule_versions').insert({commission_rule_id:current.id,version:(latest?.version||0)+1,effective_from:new Date(form.effectiveFrom+'T00:00:00').toISOString(),fixed_amount:form.method==='fixed'?value:null,rate_percent:form.method==='percentage'?value:null,rule_type:type,basis:form.basis,sales_source:form.salesSource,status:'draft',created_by:user.id,submitted_by:user.id,submitted_at:new Date().toISOString(),approved_by:user.id,approved_at:new Date().toISOString()}).select().single()
+   // Use UTC date boundaries consistently with the Edge Function's sale-date comparisons.
+   const effectiveFrom=new Date(form.effectiveFrom+'T00:00:00.000Z').toISOString()
+   const previousEffectiveTo=new Date(Date.parse(effectiveFrom)-1).toISOString()
+   const {data:v,error:ve}=await supabase.from('commission_rule_versions').insert({commission_rule_id:current.id,version:(latest?.version||0)+1,effective_from:effectiveFrom,fixed_amount:form.method==='fixed'?value:null,rate_percent:form.method==='percentage'?value:null,rule_type:type,basis:form.basis,sales_source:form.salesSource,status:'draft',created_by:user.id,submitted_by:user.id,submitted_at:new Date().toISOString(),approved_by:user.id,approved_at:new Date().toISOString()}).select().single()
    if(ve)throw ve
-   if(latest){const {error}=await supabase.from('commission_rule_versions').update({effective_to:new Date(form.effectiveFrom+'T00:00:00').toISOString(),status:'expired'}).eq('id',latest.id);if(error)throw error}
+   // The previous version ends just before the new version starts, avoiding overlap.
+   if(latest){const {error}=await supabase.from('commission_rule_versions').update({effective_to:previousEffectiveTo,status:'expired'}).eq('id',latest.id);if(error)throw error}
    const {error:activateError}=await supabase.from('commission_rule_versions').update({status:'active'}).eq('id',v.id);if(activateError)throw activateError
    await load();setOk('የድርጅት ነባሪ የኮሚሽን ሕግ ተመዝግቧል።')
   }catch(e){setError(e.message||'የነባሪ ኮሚሽን ሕጉን ማስቀመጥ አልተቻለም።')}finally{setBusy(false)}
