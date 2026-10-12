@@ -7,7 +7,7 @@ export function GlobalCommissionPolicy({user,onOpenEarnings}){
  const [form,setForm]=useState({method:'percentage',basis:'sales_amount',salesSource:'receipt_sales',value:'',effectiveFrom:new Date().toISOString().slice(0,10)})
  const load=async()=>{
   setLoading(true);setError('')
-  const {data,error}=await supabase.from('commission_rules').select('id,name,code,rule_type,basis,price_dependency,sales_source,priority,status,active,commission_rule_versions(id,version,effective_from,effective_to,fixed_amount,rate_percent,rule_type,basis,sales_source,status)').eq('organization_id',user.organization_id).is('product_id',null).is('product_variant_id',null).order('created_at',{ascending:true})
+  const {data,error}=await supabase.from('commission_rules').select('id,name,code,rule_type,basis,price_dependency,sales_source,priority,status,active,commission_rule_versions(id,version,effective_from,effective_to,fixed_amount,rate_percent,rule_type,basis,sales_source,status)').eq('organization_id',user.organization_id).is('product_id',null).is('product_variant_id',null).is('branch_id',null).order('created_at',{ascending:true})
   if(error){setError(error.message);setRule(null)}else{
    const rows=data||[],found=rows.find(x=>x.code==='organization_default_commission')||rows[0]||null
    setRule(found)
