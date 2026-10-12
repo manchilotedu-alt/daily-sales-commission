@@ -76,7 +76,7 @@ export function SalesReviewPage({user}){
        </td>
       </tr>
       {open===s.id&&<tr className="border-b bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950"><td colSpan="8" className="p-4">
-       <SaleDetails sale={s}/>
+       <SaleDetails sale={s} user={user} onAdjusted={load}/>
       </td></tr>}
      </React.Fragment>)}
      {!loading&&!sales.length&&<tr><td colSpan="8" className="p-10 text-center text-zinc-500">ምንም የሽያጭ መዝገብ የለም።</td></tr>}
@@ -87,8 +87,10 @@ export function SalesReviewPage({user}){
  </section>
 }
 
-function SaleDetails({sale}){
+function SaleDetails({sale,user,onAdjusted}){
  const [items,setItems]=useState([]),[alloc,setAlloc]=useState([]),[teamVersion,setTeamVersion]=useState(null),[loading,setLoading]=useState(true)
+ const canAdjust=['super_admin','admin','branch_admin'].includes(user?.role)
+ const [adjustments,setAdjustments]=useState([]),[adjustForm,setAdjustForm]=useState({increase_percent:'',decrease_percent:'',increase_amount:'',decrease_amount:'',override_commission:'',reason:''}),[adjustBusy,setAdjustBusy]=useState(false),[adjustError,setAdjustError]=useState(''),[adjustOk,setAdjustOk]=useState('')
  useEffect(()=>{
   let live=true
   ;(async()=>{
@@ -121,6 +123,47 @@ function SaleDetails({sale}){
   })()
   return()=>{live=false}
  },[sale.id])
+ useEffect(()=>{
+  let live=true
+  ;(async()=>{
+   if(!canAdjust){setAdjustments([]);return}
+   const {data,error}=await supabase.from('sale_commission_adjustments').select('id,sale_id,base_commission,increase_percent,decrease_percent,increase_amount,decrease_amount,override_commission,adjustment_amount,final_commission,reason,created_by,created_at').eq('sale_id',sale.id).order('created_at',{ascending:false})
+   if(error){if(live)setAdjustError(error.message);return}
+   const ids=[...new Set((data||[]).map(x=>x.created_by).filter(Boolean))]
+   const people=ids.length?await supabase.from('profiles').select('id,full_name').in('id',ids):{data:[],error:null}
+   const byId=new Map((people.data||[]).map(x=>[x.id,x.full_name]))
+   if(live)setAdjustments((data||[]).map(x=>({...x,createdByName:byId.get(x.created_by)||x.created_by})))
+  })()
+  return()=>{live=false}
+ },[sale.id,canAdjust])
+ const baseCommission=Number(sale.gross_commission||0)
+ const overrideValue=adjustForm.override_commission===''?null:Number(adjustForm.override_commission)
+ const previewFinal=overrideValue!==null?overrideValue:baseCommission+baseCommission*(Number(adjustForm.increase_percent||0)-Number(adjustForm.decrease_percent||0))/100+Number(adjustForm.increase_amount||0)-Number(adjustForm.decrease_amount||0)
+ const previewAdjustment=previewFinal-baseCommission
+ const saveAdjustment=async e=>{
+  e.preventDefault();setAdjustError('');setAdjustOk('')
+  if(!canAdjust||sale.status!=='approved')return
+  if(!adjustForm.reason.trim()){setAdjustError('የማስተካከያውን ምክንያት ያስገቡ።');return}
+  if([adjustForm.increase_percent,adjustForm.decrease_percent].some(v=>v!==''&&(!Number.isFinite(Number(v))||Number(v)<0||Number(v)>100))||[adjustForm.increase_amount,adjustForm.decrease_amount,adjustForm.override_commission].some(v=>v!==''&&(!Number.isFinite(Number(v))||Number(v)<0))||!Number.isFinite(previewFinal)||previewFinal<0){
+   setAdjustError('የኮሚሽን ማስተካከያ መጠኖችን በትክክል ያስገቡ።');return
+  }
+  setAdjustBusy(true)
+  try{
+   const {data,error}=await supabase.functions.invoke('adjust-sale-commission',{body:{sale_id:sale.id,increase_percent:Number(adjustForm.increase_percent||0),decrease_percent:Number(adjustForm.decrease_percent||0),increase_amount:Number(adjustForm.increase_amount||0),decrease_amount:Number(adjustForm.decrease_amount||0),override_commission:adjustForm.override_commission===''?null:Number(adjustForm.override_commission),reason:adjustForm.reason.trim()}})
+   if(error)throw error
+   if(data?.error)throw new Error(data.error)
+   setAdjustForm({increase_percent:'',decrease_percent:'',increase_amount:'',decrease_amount:'',override_commission:'',reason:''})
+   setAdjustOk('የዚህ ሽያጭ ኮሚሽን ተስተካክሏል።')
+   const {data:rows,error:historyError}=await supabase.from('sale_commission_adjustments').select('id,sale_id,base_commission,increase_percent,decrease_percent,increase_amount,decrease_amount,override_commission,adjustment_amount,final_commission,reason,created_by,created_at').eq('sale_id',sale.id).order('created_at',{ascending:false})
+   if(historyError)throw historyError
+   const ids=[...new Set((rows||[]).map(x=>x.created_by).filter(Boolean))]
+   const people=ids.length?await supabase.from('profiles').select('id,full_name').in('id',ids):{data:[],error:null}
+   const byId=new Map((people.data||[]).map(x=>[x.id,x.full_name]))
+   setAdjustments((rows||[]).map(x=>({...x,createdByName:byId.get(x.created_by)||x.created_by})))
+   await onAdjusted?.()
+  }catch(err){setAdjustError(err.message||'የኮሚሽን ማስተካከያው አልተሳካም።')}
+  finally{setAdjustBusy(false)}
+ }
  return <div className="space-y-4">
   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
    <Info label="ጠቅላላ ብዛት" value={sale.total_quantity||0}/>
@@ -140,6 +183,23 @@ function SaleDetails({sale}){
    <h4 className="mb-2 font-bold">የኮሚሽን ክፍፍል</h4>
    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{alloc.map(a=><div key={a.id} className="rounded-xl border p-3 dark:border-zinc-800"><div className="font-bold">{a.employeeName||'ስም አልተገኘም'}</div><div className="text-xs text-zinc-500">{roles[a.role_code]||a.role_code}</div>{!a.employeeName&&a.employee_id&&<div className="mt-1 break-all text-xs text-zinc-400">ID: {a.employee_id}</div>}<div className="mt-2 font-bold">{money(a.allocated_commission)} ብር</div><div className="text-xs text-zinc-500">{a.split_percentage}% · ቦታ {a.employee_position||1}</div>{a.team_split_version_id&&<div className="mt-1 text-xs text-zinc-400">የክፍፍል ስሪት ተመዝግቧል</div>}</div>)}</div>
   </div>
+  {canAdjust&&<div className="rounded-xl border p-4 dark:border-zinc-800">
+   <div className="font-bold">የዚህ ሽያጭ ኮሚሽን Adjustment</div>
+   <p className="mt-1 text-xs text-zinc-500">ይህ ማስተካከያ ለዚህ ሽያጭ ብቻ ነው፤ የምርቱን መደበኛ ኮሚሽን አይቀይርም። የተፈቀዱ ሽያጮች ላይ ብቻ ይሠራል።</p>
+   {adjustError&&<div className="mt-3 rounded-lg bg-rose-500/10 p-2 text-sm text-rose-500">{adjustError}</div>}
+   {adjustOk&&<div className="mt-3 rounded-lg bg-emerald-500/10 p-2 text-sm text-emerald-600">{adjustOk}</div>}
+   {sale.status==='approved'?<form onSubmit={saveAdjustment} className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+    <label className="text-xs font-semibold text-zinc-500">ጭማሪ (%)<input className="input mt-1" type="number" min="0" max="100" step="0.01" value={adjustForm.increase_percent} onChange={e=>setAdjustForm({...adjustForm,increase_percent:e.target.value})} placeholder="0"/></label>
+    <label className="text-xs font-semibold text-zinc-500">ቅናሽ (%)<input className="input mt-1" type="number" min="0" max="100" step="0.01" value={adjustForm.decrease_percent} onChange={e=>setAdjustForm({...adjustForm,decrease_percent:e.target.value})} placeholder="0"/></label>
+    <label className="text-xs font-semibold text-zinc-500">ተጨማሪ ብር (ETB)<input className="input mt-1" type="number" min="0" step="0.01" value={adjustForm.increase_amount} onChange={e=>setAdjustForm({...adjustForm,increase_amount:e.target.value})} placeholder="0.00"/></label>
+    <label className="text-xs font-semibold text-zinc-500">የሚቀነስ ብር (ETB)<input className="input mt-1" type="number" min="0" step="0.01" value={adjustForm.decrease_amount} onChange={e=>setAdjustForm({...adjustForm,decrease_amount:e.target.value})} placeholder="0.00"/></label>
+    <label className="text-xs font-semibold text-zinc-500">በቀጥታ የመጨረሻ ኮሚሽን (Override · አማራጭ)<input className="input mt-1" type="number" min="0" step="0.01" value={adjustForm.override_commission} onChange={e=>setAdjustForm({...adjustForm,override_commission:e.target.value})} placeholder="ባዶ ይተዉ"/></label>
+    <label className="text-xs font-semibold text-zinc-500 sm:col-span-2 lg:col-span-1">ምክንያት<input className="input mt-1" required maxLength="1000" value={adjustForm.reason} onChange={e=>setAdjustForm({...adjustForm,reason:e.target.value})} placeholder="ለምን እንደሚስተካከል"/></label>
+    <div className="rounded-xl bg-zinc-50 p-3 text-sm dark:bg-zinc-800"><div className="flex justify-between gap-2"><span>ከማስተካከያ በፊት</span><b>{money(baseCommission)} ብር</b></div><div className="mt-1 flex justify-between gap-2"><span>ልዩነት</span><b>{previewAdjustment>=0?'+':''}{money(previewAdjustment)} ብር</b></div><div className="mt-1 flex justify-between gap-2"><span>የመጨረሻ ኮሚሽን</span><b>{money(previewFinal)} ብር</b></div></div>
+    <button className="btn self-end" disabled={adjustBusy}>{adjustBusy?'በማስቀመጥ ላይ…':'ማስተካከያውን አስቀምጥ'}</button>
+   </form>:<p className="mt-3 text-sm text-zinc-500">የሽያጩ ሁኔታ ተፈቅዷል ከሆነ ብቻ Adjustment ማድረግ ይቻላል።</p>}
+   <div className="mt-4"><h5 className="mb-2 text-sm font-bold">የማስተካከያ ታሪክ</h5>{adjustments.length?<div className="space-y-2">{adjustments.map(a=><div key={a.id} className="rounded-lg border p-3 text-xs dark:border-zinc-700"><div className="flex flex-wrap justify-between gap-2"><b>{new Date(a.created_at).toLocaleString()} · {a.createdByName}</b><b>{money(a.final_commission)} ብር</b></div><div className="mt-1">መነሻ {money(a.base_commission)} · ለውጥ {Number(a.adjustment_amount)>=0?'+':''}{money(a.adjustment_amount)} · ምክንያት: {a.reason}</div></div>)}</div>:<p className="text-xs text-zinc-500">እስካሁን ማስተካከያ አልተመዘገበም።</p>}</div>
+  </div>}
   {sale.status==='rejected'&&<div className="rounded-xl bg-rose-500/10 p-3 text-sm text-rose-400"><b>የመመለሻ ምክንያት፦</b> {sale.reject_reason||'—'}</div>}
   {sale.verified&&<div className="text-xs text-zinc-500">ያረጋገጠው፦ {sale.verified.full_name||'—'} {sale.verified_at?'• '+new Date(sale.verified_at).toLocaleString():''}</div>}
  </div>
