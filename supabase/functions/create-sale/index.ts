@@ -160,7 +160,7 @@ Deno.serve(async req=>{
 
   // Commission rules are independent from price. A rule may match product/variant through conditions JSON.
   const {data:rules,error:re}=await admin.from('commission_rules')
-   .select('id,name,rule_type,basis,price_dependency,sales_source,product_id,product_variant_id,branch_id,priority,status,commission_rule_versions(id,version,effective_from,effective_to,fixed_amount,rate_percent,status,commission_rule_tiers(id,min_value,max_value,rate_percent,fixed_amount,tier_order))')
+   .select('id,name,rule_type,basis,price_dependency,sales_source,product_id,product_variant_id,branch_id,priority,status,commission_rule_versions(id,version,effective_from,effective_to,fixed_amount,rate_percent,status,rule_type,basis,sales_source,commission_rule_tiers(id,min_value,max_value,rate_percent,fixed_amount,tier_order))')
    .eq('organization_id',org).eq('active',true)
   if(re)throw re
 
@@ -186,15 +186,16 @@ Deno.serve(async req=>{
    let commission=0
    if(matched){
     const {r,v}=matched
-    const basis=r.basis
-    const salesSource=r.sales_source==='system_sales'?'system_sales':'receipt_sales'
+    const basis=v.basis||r.basis
+    const salesSource=(v.sales_source||r.sales_source)==='system_sales'?'system_sales':'receipt_sales'
+    const ruleType=v.rule_type||r.rule_type
     const sourceSalesValue=salesSource==='system_sales'?line.system_sales_value:line.line_amt
     const base=basis==='quantity'?line.qty:basis==='unit_price'?(salesSource==='system_sales'?sourceSalesValue/Math.max(1,line.qty):line.rate):sourceSalesValue
     line.commission_sales_source=salesSource
-    if(r.rule_type==='fixed_amount')commission=Number(v.fixed_amount||0)*(basis==='quantity'?line.qty:1)
-    else if(r.rule_type==='percentage')commission=Number(base)*Number(v.rate_percent||0)/100
-    else if(r.rule_type==='no_commission')commission=0
-    else if(r.rule_type==='tiered'||r.rule_type==='price_range'){
+    if(ruleType==='fixed_amount')commission=Number(v.fixed_amount||0)*(basis==='quantity'?line.qty:1)
+    else if(ruleType==='percentage')commission=Number(base)*Number(v.rate_percent||0)/100
+    else if(ruleType==='no_commission')commission=0
+    else if(ruleType==='tiered'||ruleType==='price_range'){
      const tiers=(v.commission_rule_tiers||[]).slice().sort((a:any,b:any)=>Number(a.tier_order)-Number(b.tier_order))
      const tier=tiers.filter((t:any)=>base>=Number(t.min_value||0)&&(t.max_value==null||base<=Number(t.max_value))).sort((a:any,b:any)=>Number(b.min_value||0)-Number(a.min_value||0))[0]
      if(tier) commission=tier.fixed_amount!=null?Number(tier.fixed_amount)*(basis==='quantity'?line.qty:1):Number(base)*Number(tier.rate_percent||0)/100
