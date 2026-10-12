@@ -30,6 +30,8 @@ Deno.serve(async req=>{
   if(!org||!Array.isArray(body.items)||!body.items.length)return out({error:'Sale data is incomplete'},400)
   const receiptReference=String(body.receipt_reference||'').trim()
   if(!receiptReference||receiptReference.length>120)return out({error:'Receipt/reference number is required (maximum 120 characters)'},400)
+  const systemSalesReference=String(body.system_sales_reference||'').trim()
+  if(!systemSalesReference||systemSalesReference.length>120)return out({error:'External system sales reference is required (maximum 120 characters)'},400)
   if(!body.team_id)return out({error:'Select the sales team for this sale'},400)
 
   const saleDate=String(body.sale_date||'')
@@ -53,9 +55,10 @@ Deno.serve(async req=>{
   const requestedItems=body.items.map((x:any)=>({
    product_id:Number(x.product_id),
    product_variant_id:x.product_variant_id?String(x.product_variant_id):null,
-   qty:Number(x.qty)
+   qty:Number(x.qty),
+   system_sales_value:Number(x.system_sales_value)
   }))
-  if(requestedItems.some(x=>!Number.isInteger(x.product_id)||!Number.isInteger(x.qty)||x.qty<1||x.qty>100000))
+  if(requestedItems.some(x=>!Number.isInteger(x.product_id)||!Number.isInteger(x.qty)||x.qty<1||x.qty>100000||!Number.isFinite(x.system_sales_value)||x.system_sales_value<0))
    return out({error:'Invalid product or quantity'},400)
   const uniqueKeys=new Set(requestedItems.map(x=>`${x.product_id}:${x.product_variant_id||''}`))
   if(uniqueKeys.size!==requestedItems.length)return out({error:'Duplicate product/variant line'},400)
@@ -152,12 +155,12 @@ Deno.serve(async req=>{
     ||null
    const rate=Number(priceRow?.price ?? p.rate ?? 0)
    if(!Number.isFinite(rate)||rate<0)return out({error:'Invalid product price'},409)
-   clean.push({product_id:x.product_id,product_variant_id:x.product_variant_id,qty:x.qty,rate,line_amt:money(x.qty*rate),price_version_id:priceRow?.id||null})
+   clean.push({product_id:x.product_id,product_variant_id:x.product_variant_id,qty:x.qty,rate,line_amt:money(x.qty*rate),system_sales_value:money(x.system_sales_value),price_version_id:priceRow?.id||null})
   }
 
   // Commission rules are independent from price. A rule may match product/variant through conditions JSON.
   const {data:rules,error:re}=await admin.from('commission_rules')
-   .select('id,name,rule_type,basis,price_dependency,product_id,product_variant_id,branch_id,priority,status,commission_rule_versions(id,version,effective_from,effective_to,fixed_amount,rate_percent,status,commission_rule_tiers(id,min_value,max_value,rate_percent,fixed_amount,tier_order))')
+   .select('id,name,rule_type,basis,price_dependency,sales_source,product_id,product_variant_id,branch_id,priority,status,commission_rule_versions(id,version,effective_from,effective_to,fixed_amount,rate_percent,status,commission_rule_tiers(id,min_value,max_value,rate_percent,fixed_amount,tier_order))')
    .eq('organization_id',org).eq('active',true)
   if(re)throw re
 
@@ -184,7 +187,10 @@ Deno.serve(async req=>{
    if(matched){
     const {r,v}=matched
     const basis=r.basis
-    const base=basis==='quantity'?line.qty:(basis==='unit_price'||basis==='price_range')?line.rate:line.line_amt
+    const salesSource=r.sales_source==='system_sales'?'system_sales':'receipt_sales'
+    const sourceSalesValue=salesSource==='system_sales'?line.system_sales_value:line.line_amt
+    const base=basis==='quantity'?line.qty:basis==='unit_price'?(salesSource==='system_sales'?sourceSalesValue/Math.max(1,line.qty):line.rate):sourceSalesValue
+    line.commission_sales_source=salesSource
     if(r.rule_type==='fixed_amount')commission=Number(v.fixed_amount||0)*(basis==='quantity'?line.qty:1)
     else if(r.rule_type==='percentage')commission=Number(base)*Number(v.rate_percent||0)/100
     else if(r.rule_type==='no_commission')commission=0
@@ -199,6 +205,7 @@ Deno.serve(async req=>{
    }else{
     // No configured rule means no commission, never invent a commission from product price.
     line.commission_rule_version_id=null
+    line.commission_sales_source='receipt_sales'
    }
    line.commission_amount=money(Math.max(0,commission))
    grossCommission=money(grossCommission+line.commission_amount)
@@ -266,6 +273,7 @@ Deno.serve(async req=>{
 
   const totalQuantity=clean.reduce((n,x)=>n+x.qty,0)
   const totalSalesValue=money(clean.reduce((n,x)=>n+x.line_amt,0))
+  const systemSalesTotal=money(clean.reduce((n,x)=>n+x.system_sales_value,0))
 
   const allocations:any[]=[]
   let allocated=0
@@ -293,7 +301,7 @@ Deno.serve(async req=>{
   const salePayload:any={
    sale_date:saleDate,lead_id:leadRecipient?.id||null,assistant_id:assistantRecipient?.id||null,driver_id:driverRecipient?.id||null,
    submitted_by:caller.id,entered_by:caller.id,team_id:team.id,lead_employee_id:leadRecipient?.id||null,
-   receipt_reference:receiptReference,
+   receipt_reference:receiptReference,system_sales_reference:systemSalesReference,system_sales_total:systemSalesTotal,
    sales_source_policy_version_id:body.sales_source_policy_version_id||null,
    team_structure_version_id:structure.id,team_split_version_id:splitVersion.id,
    total:totalSalesValue,total_quantity:totalQuantity,total_sales_value:totalSalesValue,gross_commission:grossCommission,
@@ -305,7 +313,7 @@ Deno.serve(async req=>{
 
   const rows=clean.map(x=>({
    sale_id:sale.id,product_id:x.product_id,product_variant_id:x.product_variant_id,
-   qty:x.qty,rate:x.rate,line_amt:x.line_amt,unit_price_snapshot:x.rate,sales_value:x.line_amt,
+   qty:x.qty,rate:x.rate,line_amt:x.line_amt,unit_price_snapshot:x.rate,sales_value:x.line_amt,system_sales_value:x.system_sales_value,commission_sales_source:x.commission_sales_source||'receipt_sales',
    commission_rule_version_id:x.commission_rule_version_id,commission_amount:x.commission_amount
   }))
   let itemInsertError:any=null
