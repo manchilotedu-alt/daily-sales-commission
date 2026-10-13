@@ -32,6 +32,19 @@ Deno.serve(async req=>{
    if(!global && data.scope_branch_id && data.scope_branch_id!==branchId)return false
    return !data.scope_branch_id||data.scope_branch_id===branchId
   }
+  const saveEmployeePermissions=async (userId,items)=>{
+   if(!Array.isArray(items))return null
+   const {data:allPermissions,error:permissionError}=await a.from('permissions').select('code')
+   if(permissionError)return permissionError
+   const selected=new Set(items.filter(p=>p&&typeof p.permission_code==='string'&&p.enabled===true).map(p=>p.permission_code))
+   const validCodes=new Set((allPermissions||[]).map(p=>p.code))
+   const invalid=[...selected].filter(code=>!validCodes.has(code))
+   if(invalid.length)return new Error('Invalid permission code')
+   const rows=[...validCodes].map(permission_code=>({user_id:userId,permission_code,enabled:selected.has(permission_code),updated_by:caller.id,updated_at:new Date().toISOString()}))
+   if(!rows.length)return null
+   const {error}=await a.from('employee_permissions').upsert(rows,{onConflict:'user_id,permission_code'})
+   return error||null
+  }
   if(body.action==='management_role'||body.action==='management_role_status'){
    if(!global)return out({error:'Only Super Admin/Admin can manage management roles'},403)
    if(body.action==='management_role'&&!body.organization_id)return out({error:'organization_id is required'},400)
@@ -76,6 +89,7 @@ Deno.serve(async req=>{
    const plate=String(body.plate_number||'').trim();if(body.role==='driver'&&!plate)return out({error:'Vehicle plate number is required for a driver'},400)
    const {data:u,error:ue}=await a.auth.admin.createUser({phone,password:body.password,phone_confirm:true,user_metadata:{full_name:String(body.full_name).trim()}});if(ue)return out({error:ue.message},400)
    const {error:pe}=await a.from('profiles').upsert({id:u.user.id,full_name:String(body.full_name).trim(),phone,role:body.role,active:true,organization_id:org,branch_id:branch||null,department_id:body.department_id||null,plate_number:body.role==='driver'?plate:null});if(pe){await a.auth.admin.deleteUser(u.user.id);return out({error:pe.message},400)}
+   const permissionSaveError=await saveEmployeePermissions(u.user.id,body.employee_permissions);if(permissionSaveError){await a.auth.admin.deleteUser(u.user.id);return out({error:'Employee was not saved because permissions failed: '+permissionSaveError.message},400)}
    return out({ok:true,user_id:u.user.id})
   }
   const id=body.user_id;if(!id)return out({error:'user_id is required'},400)
@@ -100,6 +114,7 @@ Deno.serve(async req=>{
    const {error:ae}=await a.auth.admin.updateUserById(id,{phone:nextPhone});if(ae)throw ae
    const {error:pe}=await a.from('profiles').update({full_name:String(body.full_name).trim(),phone:nextPhone,role:body.role,organization_id:org,branch_id:branch||null,department_id:body.department_id||null,plate_number:body.role==='driver'?plate:null}).eq('id',id)
    if(pe){await a.auth.admin.updateUserById(id,{phone:t.phone||undefined}).catch(()=>{});throw pe}
+   const permissionSaveError=await saveEmployeePermissions(id,body.employee_permissions);if(permissionSaveError)return out({error:'Employee details were updated, but permissions were not saved: '+permissionSaveError.message},400)
    return out({ok:true})
   }
   return out({error:'Unknown action'},400)
