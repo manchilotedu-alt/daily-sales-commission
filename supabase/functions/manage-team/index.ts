@@ -34,7 +34,7 @@ Deno.serve(async req=>{
    if(te||!team)return out({error:'Team not found'},404)
    if(!global&&(team.organization_id!==me.organization_id||team.branch_id!==me.branch_id))return out({error:'Team is outside your branch'},403)
    const asOf=validDate(body.as_of)?body.as_of:today()
-   const {data:assignments,error:ae2}=await db.from('team_assignments').select('id,employee_id,team_role,employee_position,effective_from,effective_to,assignment_status,created_at,profiles(id,full_name,phone,role)').eq('team_id',team.id).lte('effective_from',asOf).or(`effective_to.is.null,effective_to.gte.${asOf}`).order('created_at',{ascending:false})
+   const {data:assignments,error:ae2}=await db.from('team_assignments').select('id,employee_id,team_role,employee_position,effective_from,effective_to,assignment_status,created_at,profiles(id,full_name,phone,role)').eq('team_id',team.id).eq('assignment_status','active').lte('effective_from',asOf).or(`effective_to.is.null,effective_to.gte.${asOf}`).order('created_at',{ascending:false})
    if(ae2)throw ae2
    const {data:structures,error:se}=await db.from('team_structures').select('id,version,status,effective_from,effective_to,team_structure_roles(role_code,required_count,position_no),team_split_versions(id,version,status,effective_from,effective_to,team_split_lines(role_code,employee_position,percentage,residual_eligible))').eq('team_id',team.id).lte('effective_from',asOf).or(`effective_to.is.null,effective_to.gte.${asOf}`).order('version',{ascending:false})
    if(se)throw se
@@ -76,15 +76,27 @@ Deno.serve(async req=>{
     if(!p?.active||p.organization_id!==team.organization_id||p.branch_id!==team.branch_id||!roleOk)return out({error:'Employee is inactive, outside the branch, or has an incompatible registration role'},400)
    }
 
-   // Close only the roster effective on/ before the change date; history remains available.
-   const {data:oldRows,error:oe}=await db.from('team_assignments').select('id,effective_from').eq('team_id',team.id).is('effective_to',null).lte('effective_from',start)
+   // Close the selected team's previous roster and any overlapping roster in another team.
+   // Future-dated assignments are preserved; the new assignment ends the day before the next scheduled team.
+   const {data:oldRows,error:oe}=await db.from('team_assignments').select('id,effective_from').eq('team_id',team.id).eq('assignment_status','active').is('effective_to',null).lte('effective_from',start)
    if(oe)throw oe
    for(const old of oldRows||[]){
     const end=old.effective_from===start?start:priorDate(start)
     const {error}=await db.from('team_assignments').update({effective_to:end,assignment_status:'closed'}).eq('id',old.id)
     if(error)throw error
    }
-   const insertRows=assignments.map((a:any)=>({...a,team_id:team.id,effective_from:start,effective_to:null,assignment_status:'active',created_by:me.id}))
+   const {data:otherCurrent,error:ocErr}=await db.from('team_assignments').select('id,team_id,effective_from').in('employee_id',ids).neq('team_id',team.id).eq('assignment_status','active').is('effective_to',null).lte('effective_from',start)
+   if(ocErr)throw ocErr
+   for(const old of otherCurrent||[]){
+    const end=old.effective_from===start?start:priorDate(start)
+    const {error}=await db.from('team_assignments').update({effective_to:end,assignment_status:'closed'}).eq('id',old.id)
+    if(error)throw error
+   }
+   const {data:futureRows,error:futureErr}=await db.from('team_assignments').select('employee_id,effective_from').in('employee_id',ids).eq('assignment_status','active').is('effective_to',null).gt('effective_from',start).order('effective_from',{ascending:true})
+   if(futureErr)throw futureErr
+   const nextDateByEmployee=new Map<string,string>()
+   for(const future of futureRows||[])if(!nextDateByEmployee.has(future.employee_id))nextDateByEmployee.set(future.employee_id,future.effective_from)
+   const insertRows=assignments.map((a:any)=>({...a,team_id:team.id,effective_from:start,effective_to:nextDateByEmployee.has(a.employee_id)?priorDate(nextDateByEmployee.get(a.employee_id)!):null,assignment_status:'active',created_by:me.id}))
    const {error:ie}=await db.from('team_assignments').insert(insertRows)
    if(ie)throw ie
 
