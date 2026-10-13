@@ -119,14 +119,14 @@ function ProductsPage({user}){
 }
 
 function OrganizationsAdminPage({currentUser}){
- const [section,setSection]=useState('organizations')
+ const [section,setSection]=useState('organizations'),[entryScope,setEntryScope]=useState(null)
  return <section className="space-y-5">
   <div><h2 className="text-2xl font-black">ድርጅቶች፣ ቅርንጫፎች እና ሰራተኞች</h2><p className="text-sm text-slate-400">ድርጅትን፣ በድርጅቱ ስር የሚፈጠሩ ቅርንጫፎችን፣ ሰራተኞችን እና ሚናዎችን ከአንድ ገጽ ያስተዳድሩ።</p></div>
   <div className="flex flex-wrap gap-2 rounded-xl border border-white/10 bg-white/[0.03] p-2">
    <button type="button" onClick={()=>setSection('organizations')} className={section==='organizations'?'rounded-lg bg-emerald-400 px-4 py-2 text-sm font-bold text-slate-950':'rounded-lg px-4 py-2 text-sm font-semibold text-slate-300 hover:bg-white/5'}>ድርጅቶች እና ቅርንጫፎች</button>
    <button type="button" onClick={()=>setSection('employees')} className={section==='employees'?'rounded-lg bg-emerald-400 px-4 py-2 text-sm font-bold text-slate-950':'rounded-lg px-4 py-2 text-sm font-semibold text-slate-300 hover:bg-white/5'}>ሰራተኞች እና ሚናዎች</button>
   </div>
-  {section==='organizations'?<><OrganizationManagement/><DepartmentManagement currentUser={currentUser}/></>:<UserManagement currentUser={currentUser}/>}
+  {section==='organizations'?<><OrganizationManagement onEnterBranch={b=>{setEntryScope(b);setSection('employees')}}/><DepartmentManagement currentUser={currentUser}/></>:<UserManagement currentUser={currentUser} initialOrganizationId={entryScope?.organization_id} initialBranchId={entryScope?.id}/>}
  </section>
 }
 
