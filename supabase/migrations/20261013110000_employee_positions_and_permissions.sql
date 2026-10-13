@@ -162,3 +162,42 @@ create unique index if not exists profiles_username_lower_uq
 insert into public.permissions (code, name_am, module, active)
 values ('stock.manage', 'የዕቃ/እስቶክ ቁጥጥር', 'stock', true)
 on conflict (code) do update set name_am = excluded.name_am, module = excluded.module, active = true;
+
+-- Additional standard job positions. These are templates only; office type is
+-- validated by the Edge Function and the UI before a user can be assigned.
+do $seed_extra_positions$
+declare
+  org record;
+  template record;
+  role_id uuid;
+  role_code text;
+begin
+  for org in select id from public.organizations loop
+    for template in
+      select * from (values
+        ('operations_manager', 'የኦፕሬሽን አስተዳዳሪ', array['users.create','users.manage','attendance.manage','sales.review','teams.manage','performance.view','reports.export']::text[]),
+        ('it_admin', 'የIT አስተዳዳሪ', array['users.create','users.manage','audit.view','reports.export']::text[]),
+        ('branch_accountant', 'የቅርንጫፍ አካውንታንት', array['commission.view','earnings.view','periods.manage','disputes.manage','reports.export']::text[]),
+        ('stock_manager', 'የእስቶክ/ዕቃ ግምጃ ቤት ኃላፊ', array['stock.manage','products.view','products.assign']::text[]),
+        ('procurement', 'የግዢና አቅርቦት ኃላፊ', array['stock.manage','products.view','products.assign','pricing.view']::text[])
+      ) as templates(slug, name_am, permission_codes)
+    loop
+      role_code := 'custom_' || template.slug || '_' || replace(left(org.id::text, 8), '-', '');
+      insert into public.management_roles(code, name_am, organization_id, active)
+      values (role_code, template.name_am, org.id, true)
+      on conflict (code) do nothing;
+
+      select id into role_id from public.management_roles
+      where code = role_code and organization_id = org.id limit 1;
+
+      if role_id is not null then
+        insert into public.management_role_permissions(role_id, permission_code, enabled)
+        select role_id, p.code, p.code = any(template.permission_codes)
+        from public.permissions p
+        where p.active = true
+        on conflict (role_id, permission_code) do nothing;
+      end if;
+    end loop;
+  end loop;
+end;
+$seed_extra_positions$;
