@@ -30,6 +30,18 @@ Deno.serve(async req=>{
    }
    return false
   }
+  const branchAccess=async (targetBranch,permission)=>{
+   if(global)return true
+   if(!(await hasPerm(permission)))return false
+   if(cp.role==='branch_admin')return cp.branch_id===targetBranch
+   if(String(cp.role||'').startsWith('custom_')){
+    let roleResult=await a.from('management_roles').select('scope_branch_id').eq('code',cp.role).eq('organization_id',cp.organization_id).eq('active',true).maybeSingle()
+    if(roleResult.error&&(/scope_branch_id|schema cache|does not exist/i.test(roleResult.error.message||'')))return true
+    if(roleResult.error||!roleResult.data)return false
+    return !roleResult.data.scope_branch_id||roleResult.data.scope_branch_id===targetBranch
+   }
+   return false
+  }
   const roleAllowed=async (role,organizationId,branchId)=>{
    if(allowed.includes(role))return true
    if(!/^custom_[a-z0-9_]{2,48}$/.test(String(role||'')))return false
@@ -100,12 +112,13 @@ Deno.serve(async req=>{
   }
   if(body.action==='create'){
    if(!global && !(await hasPerm('users.create')))return out({error:'የሰራተኛ መፍጠር ፍቃድ አልተሰጠዎትም'},403)
-   if(!(await roleAllowed(body.role,global?body.organization_id:cp.organization_id,(global?body.branch_id:cp.branch_id)))||!String(body.full_name||'').trim()||!String(body.password||'').trim())return out({error:'Full name, role, and password are required'},400)
+   const org=global?body.organization_id:cp.organization_id,branch=(global||String(cp.role||'').startsWith('custom_')?body.branch_id:cp.branch_id)||null
+   if(!(await roleAllowed(body.role,org,branch))||!String(body.full_name||'').trim()||!String(body.password||'').trim())return out({error:'Full name, role, and password are required'},400)
    const username=String(body.username||'').trim().toLowerCase();if(!/^[a-z][a-z0-9._-]{2,31}$/.test(username))return out({error:'Username must start with a letter and contain 3–32 letters, numbers, dots, underscores, or hyphens'},400)
    const {data:existingUsername,error:usernameError}=await a.from('profiles').select('id').eq('username',username).limit(1);if(usernameError)throw usernameError;if(existingUsername?.length)return out({error:'This username is already in use'},409)
    if(String(body.password).length<8)return out({error:'Password must be at least 8 characters'},400)
-   const org=global?body.organization_id:cp.organization_id,branch=(global?body.branch_id:cp.branch_id)||null;if(!org||!branch)return out({error:'Organization and Head Office/branch are required'},400)
-   if(!global&&(org!==cp.organization_id||branch!==cp.branch_id))return out({error:'Forbidden'},403)
+   if(!org||!branch)return out({error:'Organization and Head Office/branch are required'},400)
+   if(!global&&(org!==cp.organization_id||!(await branchAccess(branch,'users.create'))))return out({error:'Forbidden'},403)
    const {data:b,error:branchError}=await a.from('branches').select('id,organization_id,active,is_head_office').eq('id',branch).maybeSingle();if(branchError)throw branchError;if(!b?.active||b.organization_id!==org)return out({error:'Invalid Head Office/branch'},400)
    if(/^custom_(hr|finance|commission_manager|auditor|operations_manager|it_admin)_/.test(String(body.role||''))&&!b.is_head_office)return out({error:'This job position is available only at Head Office'},400)
    if(/^custom_(sales_manager|branch_accountant|stock_manager|branch_manager)_/.test(String(body.role||''))&&b.is_head_office)return out({error:'This job position is available only at a branch'},400)
@@ -125,17 +138,17 @@ Deno.serve(async req=>{
   const {data:t}=await a.from('profiles').select('role,phone,username,organization_id,branch_id,plate_number').eq('id',id).single();if(!t)return out({error:'User not found'},404)
   if(['super_admin','admin'].includes(t.role))return out({error:'Global administrators cannot be managed here'},403)
   if(!global && t.role==='branch_admin')return out({error:'Branch Admin accounts can only be managed by Super Admin/Admin'},403)
-  if(!global&&(t.organization_id!==cp.organization_id||t.branch_id!==cp.branch_id))return out({error:'Forbidden'},403)
+  if(!global&&(t.organization_id!==cp.organization_id||!(await branchAccess(t.branch_id,'users.manage'))))return out({error:'Forbidden'},403)
   if(!global && !(await hasPerm('users.manage')))return out({error:'የሰራተኛ ማስተዳደር ፍቃድ አልተሰጠዎትም'},403)
   if(body.action==='activate'){const {error}=await a.from('profiles').update({active:!!body.active}).eq('id',id);if(error)throw error;return out({ok:true})}
   if(body.action==='reset_password'){if(String(body.password||'').length<8)return out({error:'Password must be at least 8 characters'},400);const {error}=await a.auth.admin.updateUserById(id,{password:body.password});if(error)throw error;return out({ok:true})}
   if(body.action==='delete'){const {error}=await a.auth.admin.deleteUser(id);if(error)throw error;return out({ok:true})}
   if(body.action==='update'){
-   const org=global?body.organization_id:cp.organization_id,branch=(global?body.branch_id:cp.branch_id)||null
+   const org=global?body.organization_id:cp.organization_id,branch=(global||String(cp.role||'').startsWith('custom_')?body.branch_id:cp.branch_id)||null
    if(!org||!branch)return out({error:'Organization and Head Office/branch are required'},400)
-   if(!(await roleAllowed(body.role,global?body.organization_id:cp.organization_id,(global?body.branch_id:cp.branch_id)))||!String(body.full_name||'').trim())return out({error:'Full name and valid role are required'},400)
+   if(!(await roleAllowed(body.role,org,branch))||!String(body.full_name||'').trim())return out({error:'Full name and valid role are required'},400)
    let username=t.username||null;if(body.username!==undefined){username=String(body.username||'').trim().toLowerCase();if(!/^[a-z][a-z0-9._-]{2,31}$/.test(username))return out({error:'Username must start with a letter and contain 3–32 letters, numbers, dots, underscores, or hyphens'},400);const {data:usernameRows,error:usernameError}=await a.from('profiles').select('id').eq('username',username).neq('id',id).limit(1);if(usernameError)throw usernameError;if(usernameRows?.length)return out({error:'This username is already in use'},409)}
-   if(!global&&(org!==cp.organization_id||branch!==cp.branch_id))return out({error:'Forbidden'},403)
+   if(!global&&(org!==cp.organization_id||!(await branchAccess(branch,'users.manage'))))return out({error:'Forbidden'},403)
    const {data:b,error:branchError}=await a.from('branches').select('id,organization_id,active,is_head_office').eq('id',branch).maybeSingle();if(branchError)throw branchError;if(!b?.active||b.organization_id!==org)return out({error:'Invalid Head Office/branch'},400)
    if(/^custom_(hr|finance|commission_manager|auditor|operations_manager|it_admin)_/.test(String(body.role||''))&&!b.is_head_office)return out({error:'This job position is available only at Head Office'},400)
    if(/^custom_(sales_manager|branch_accountant|stock_manager|branch_manager)_/.test(String(body.role||''))&&b.is_head_office)return out({error:'This job position is available only at a branch'},400)
