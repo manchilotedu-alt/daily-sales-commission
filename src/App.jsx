@@ -146,7 +146,7 @@ export default function App(){
   const identifier=String(e.currentTarget.identifier.value||'').trim(),password=e.currentTarget.password.value
   if(!identifier){setError('Username፣ ስልክ ቁጥር ወይም ኢሜይል ያስገቡ');return}
   try{
-   if(!identifier.includes('@')&&!/^[+\\d\\s()-]+$/.test(identifier)){
+   if(!identifier.includes('@')&&!/^[+\d\s()-]+$/.test(identifier)){
     const {data,error}=await supabase.functions.invoke('username-login',{body:{username:identifier,password}})
     if(error)throw error
     if(!data?.session?.access_token||!data?.session?.refresh_token)throw new Error('Username ወይም የይለፍ ቃል ትክክል አይደለም')
