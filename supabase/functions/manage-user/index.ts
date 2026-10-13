@@ -71,6 +71,7 @@ Deno.serve(async req=>{
    const code=String(body.code||'').trim()
    const nameAm=String(body.name_am||'').trim()
    if(!/^custom_[a-z0-9_]{2,48}$/.test(code)||!nameAm)return out({error:'Valid custom role code and Amharic name are required'},400)
+   if(body.scope_branch_id){const {data:scopeBranch,error:scopeError}=await a.from('branches').select('id,is_head_office,organization_id,active').eq('id',body.scope_branch_id).eq('organization_id',body.organization_id).eq('active',true).maybeSingle();if(scopeError)throw scopeError;if(!scopeBranch)return out({error:'Position scope must be an active office in the selected organization'},400);if(/^custom_(hr|finance|commission_manager|auditor|operations|operations_manager|it_admin)_/.test(code)&&!scopeBranch.is_head_office)return out({error:'This position must be scoped to Head Office'},400);if(/^custom_(sales_manager|branch_manager|branch_accountant|stock_manager)_/.test(code)&&scopeBranch.is_head_office)return out({error:'This position must be scoped to a branch'},400)}
    let role
    if(body.role_id){
     const roleUpdate={name_am:nameAm,name_en:body.name_en||null,description:body.description||null,updated_at:new Date().toISOString()}
