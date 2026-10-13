@@ -123,7 +123,7 @@ Deno.serve(async req=>{
    if(/^custom_(hr|finance|commission_manager|auditor|operations_manager|it_admin)_/.test(String(body.role||''))&&!b.is_head_office)return out({error:'This job position is available only at Head Office'},400)
    if(/^custom_(sales_manager|branch_accountant|stock_manager|branch_manager)_/.test(String(body.role||''))&&b.is_head_office)return out({error:'This job position is available only at a branch'},400)
    if(body.department_id){const {data:department,error:departmentError}=await a.from('organization_departments').select('id,organization_id,active').eq('id',body.department_id).maybeSingle();if(departmentError)throw departmentError;if(!department?.active||department.organization_id!==org)return out({error:'Invalid department for this organization'},400)}
-   if(body.role==='branch_admin'&&b.is_head_office)return out({error:'Branch Admin must be assigned to a regular branch, not Head Office'},400)
+   if(b.is_head_office&&['branch_admin','lead','lead_sales','assistant','driver'].includes(String(body.role||'')))return out({error:'This role is available only at a regular branch'},400)
    if(body.role==='branch_admin'){const {data:x,error:xError}=await a.from('profiles').select('id').eq('branch_id',branch).eq('role','branch_admin').eq('active',true).limit(1);if(xError)throw xError;if(x?.length)return out({error:'This branch already has an active Branch Admin'},409)}
    const phone=normalize(body.phone);if(!/^\+2519\d{8}$/.test(phone))return out({error:'Valid Ethiopian phone number is required'},400)
    const plate=String(body.plate_number||'').trim();if(body.role==='driver'&&!plate)return out({error:'Vehicle plate number is required for a driver'},400)
@@ -153,7 +153,7 @@ Deno.serve(async req=>{
    if(/^custom_(hr|finance|commission_manager|auditor|operations_manager|it_admin)_/.test(String(body.role||''))&&!b.is_head_office)return out({error:'This job position is available only at Head Office'},400)
    if(/^custom_(sales_manager|branch_accountant|stock_manager|branch_manager)_/.test(String(body.role||''))&&b.is_head_office)return out({error:'This job position is available only at a branch'},400)
    if(body.department_id){const {data:department,error:departmentError}=await a.from('organization_departments').select('id,organization_id,active').eq('id',body.department_id).maybeSingle();if(departmentError)throw departmentError;if(!department?.active||department.organization_id!==org)return out({error:'Invalid department for this organization'},400)}
-   if(body.role==='branch_admin'&&b.is_head_office)return out({error:'Branch Admin must be assigned to a regular branch, not Head Office'},400)
+   if(b.is_head_office&&['branch_admin','lead','lead_sales','assistant','driver'].includes(String(body.role||'')))return out({error:'This role is available only at a regular branch'},400)
    if(body.role==='branch_admin'){const {data:x,error:xError}=await a.from('profiles').select('id').eq('branch_id',branch).eq('role','branch_admin').eq('active',true).neq('id',id).limit(1);if(xError)throw xError;if(x?.length)return out({error:'This branch already has an active Branch Admin'},409)}
    const nextPhone=normalize(body.phone);if(!/^\+2519\d{8}$/.test(nextPhone))return out({error:'Valid Ethiopian phone number is required'},400)
    const plate=String(body.plate_number||'').trim();if(body.role==='driver'&&!plate)return out({error:'Vehicle plate number is required for a driver'},400)
