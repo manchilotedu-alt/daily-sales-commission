@@ -48,9 +48,9 @@ Deno.serve(async req=>{if(req.method==='OPTIONS')return new Response('ok',{heade
   return out({ok:true,attendance_id:x.id})
  }
  const attendanceDate=String(b.work_date||today())
- const validAttendanceDate=/^\\d{4}-\\d{2}-\\d{2}$/.test(attendanceDate)&&!Number.isNaN(Date.parse(attendanceDate))
+ const validAttendanceDate=/^\d{4}-\d{2}-\d{2}$/.test(attendanceDate)&&!Number.isNaN(Date.parse(attendanceDate))
  const attendanceScope=async(date:string)=>{
-  if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(date)||Number.isNaN(Date.parse(date)))throw new Error('Invalid attendance date')
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||Number.isNaN(Date.parse(date)))throw new Error('Invalid attendance date')
   const isGlobal=globalRole(me.role)
   let tq=db.from('teams').select('id,organization_id,branch_id').eq('status','active')
   if(!isGlobal)tq=tq.eq('organization_id',me.organization_id).eq('branch_id',me.branch_id)
