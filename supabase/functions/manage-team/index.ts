@@ -78,21 +78,21 @@ Deno.serve(async req=>{
 
    // Close the selected team's previous roster and any overlapping roster in another team.
    // Future-dated assignments are preserved; the new assignment ends the day before the next scheduled team.
-   const {data:oldRows,error:oe}=await db.from('team_assignments').select('id,effective_from').eq('team_id',team.id).eq('assignment_status','active').is('effective_to',null).lte('effective_from',start)
+   const {data:oldRows,error:oe}=await db.from('team_assignments').select('id,effective_from').eq('team_id',team.id).eq('assignment_status','active').lte('effective_from',start).or(`effective_to.is.null,effective_to.gte.${start}`)
    if(oe)throw oe
    for(const old of oldRows||[]){
     const end=old.effective_from===start?start:priorDate(start)
     const {error}=await db.from('team_assignments').update({effective_to:end,assignment_status:'closed'}).eq('id',old.id)
     if(error)throw error
    }
-   const {data:otherCurrent,error:ocErr}=await db.from('team_assignments').select('id,team_id,effective_from').in('employee_id',ids).neq('team_id',team.id).eq('assignment_status','active').is('effective_to',null).lte('effective_from',start)
+   const {data:otherCurrent,error:ocErr}=await db.from('team_assignments').select('id,team_id,effective_from').in('employee_id',ids).neq('team_id',team.id).eq('assignment_status','active').lte('effective_from',start).or(`effective_to.is.null,effective_to.gte.${start}`)
    if(ocErr)throw ocErr
    for(const old of otherCurrent||[]){
     const end=old.effective_from===start?start:priorDate(start)
     const {error}=await db.from('team_assignments').update({effective_to:end,assignment_status:'closed'}).eq('id',old.id)
     if(error)throw error
    }
-   const {data:futureRows,error:futureErr}=await db.from('team_assignments').select('employee_id,effective_from').in('employee_id',ids).eq('assignment_status','active').is('effective_to',null).gt('effective_from',start).order('effective_from',{ascending:true})
+   const {data:futureRows,error:futureErr}=await db.from('team_assignments').select('employee_id,effective_from').in('employee_id',ids).eq('assignment_status','active').gt('effective_from',start).order('effective_from',{ascending:true})
    if(futureErr)throw futureErr
    const nextDateByEmployee=new Map<string,string>()
    for(const future of futureRows||[])if(!nextDateByEmployee.has(future.employee_id))nextDateByEmployee.set(future.employee_id,future.effective_from)
@@ -103,7 +103,7 @@ Deno.serve(async req=>{
    const {data:allStructures,error:stErr}=await db.from('team_structures').select('id,version,status,effective_from,effective_to,team_structure_roles(role_code,required_count)').eq('team_id',team.id).order('version',{ascending:false})
    if(stErr)throw stErr
    const shapes=(allStructures||[]).map((s:any)=>({structure:s,counts:(s.team_structure_roles||[]).reduce((acc:any,r:any)=>({...acc,[r.role_code]:Number(r.required_count)}),{})}))
-   const current=shapes.find((x:any)=>x.structure.status==='active'&&!x.structure.effective_to&&x.structure.effective_from<=start&&sameShape(x.counts,counts))
+   const current=shapes.find((x:any)=>x.structure.status==='active'&&x.structure.effective_from<=start&&(!x.structure.effective_to||x.structure.effective_to>=start)&&sameShape(x.counts,counts))
    let structureId=current?.structure.id||null
    if(!structureId){
     const version=Math.max(0,...(allStructures||[]).map((s:any)=>Number(s.version||0)))+1
@@ -113,8 +113,8 @@ Deno.serve(async req=>{
     const roleRows=[['lead',counts.lead],['assistant',counts.assistant],['driver',counts.driver]].filter((x:any)=>Number(x[1])>0).map((x:any)=>({team_structure_id:structureId,role_code:x[0],required_count:Number(x[1]),position_no:x[0]==='lead'?1:x[0]==='assistant'?2:3}))
     const {error:re}=await db.from('team_structure_roles').insert(roleRows)
     if(re)throw re
-    const previousActive=(allStructures||[]).find((s:any)=>s.status==='active'&&!s.effective_to&&s.effective_from<=start&&s.id!==structureId)
-    if(previousActive){const {error:ce}=await db.from('team_structures').update({effective_to:priorDate(start),status:'closed'}).eq('id',previousActive.id);if(ce)throw ce}
+    const previousActive=(allStructures||[]).find((s:any)=>s.status==='active'&&s.effective_from<=start&&(!s.effective_to||s.effective_to>=start)&&s.id!==structureId)
+    if(previousActive){const end=previousActive.effective_from===start?start:priorDate(start);const {error:ce}=await db.from('team_structures').update({effective_to:end,status:'closed'}).eq('id',previousActive.id);if(ce)throw ce}
     // Reuse a previously approved split only when the structure counts match exactly.
     const matching=shapes.find((x:any)=>sameShape(x.counts,counts)&&x.structure.id!==structureId)
     if(matching){
