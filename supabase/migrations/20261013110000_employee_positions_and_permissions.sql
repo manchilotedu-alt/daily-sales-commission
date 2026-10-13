@@ -123,3 +123,14 @@ create policy organization_departments_admin_write
 on public.organization_departments for all to authenticated
 using (public.is_super_admin())
 with check (public.is_super_admin());
+
+-- Username is a unique, case-insensitive sign-in alias; phone remains the Supabase Auth credential.
+alter table public.profiles add column if not exists username text;
+create unique index if not exists profiles_username_lower_uq
+  on public.profiles (lower(username))
+  where username is not null and btrim(username) <> '';
+
+-- Permission group used by the employee form's stock/inventory checkbox.
+insert into public.permissions (code, name_am, module, active)
+values ('stock.manage', 'የዕቃ/እስቶክ ቁጥጥር', 'stock', true)
+on conflict (code) do update set name_am = excluded.name_am, module = excluded.module, active = true;
