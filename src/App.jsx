@@ -21,7 +21,12 @@ async function loadProfile(id){
  const {data,error}=await supabase.from('profiles').select('*').eq('id',id).single()
  if(error)throw error
  if(!data.active)throw new Error('ACCOUNT_DISABLED')
- if(['super_admin','admin','branch_admin'].includes(data.role))return data
+ if(['super_admin','admin'].includes(data.role))return data
+ if(data.role==='branch_admin'){
+  const {data:rows,error:permissionError}=await supabase.from('branch_admin_permissions').select('permission_code,enabled').eq('user_id',id).eq('enabled',true)
+  if(permissionError)throw permissionError
+  return {...data,management_permissions:(rows||[]).map(p=>({permission_code:p.permission_code}))}
+}
  if(!String(data.role||'').startsWith('custom_'))throw new Error('STAFF_ACCESS_RESTRICTED')
  const {data:roleInfo,error:roleError}=await supabase.from('management_roles').select('id,code,name_am,active,organization_id').eq('code',data.role).eq('organization_id',data.organization_id).eq('active',true).maybeSingle()
  if(roleError||!roleInfo)throw new Error('STAFF_ACCESS_RESTRICTED')
