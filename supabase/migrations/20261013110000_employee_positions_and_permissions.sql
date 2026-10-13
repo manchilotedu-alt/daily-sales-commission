@@ -55,6 +55,50 @@ create table if not exists public.employee_permissions (
 create index if not exists employee_permissions_user_enabled_idx
   on public.employee_permissions (user_id, enabled);
 
+-- Make individual employee permissions effective for the existing RLS permission checks.
+-- If per-employee rows exist, they override the role template, matching loadProfile().
+create or replace function private.has_management_permission(p_permission_code text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = pg_catalog, public, private
+as $function$
+  select exists (
+    select 1
+    from public.profiles p
+    where p.id = (select auth.uid())
+      and p.active = true
+      and p.organization_id is not null
+      and (
+        (
+          exists (select 1 from public.employee_permissions ep0 where ep0.user_id = p.id)
+          and exists (
+            select 1 from public.employee_permissions ep
+            where ep.user_id = p.id
+              and ep.permission_code = p_permission_code
+              and ep.enabled = true
+          )
+        )
+        or (
+          not exists (select 1 from public.employee_permissions ep0 where ep0.user_id = p.id)
+          and exists (
+            select 1
+            from public.management_roles r
+            join public.management_role_permissions rp on rp.role_id = r.id
+            where r.code = p.role
+              and r.active = true
+              and (r.organization_id is null or r.organization_id = p.organization_id)
+              and (r.scope_branch_id is null or r.scope_branch_id = p.branch_id)
+              and rp.permission_code = p_permission_code
+              and rp.enabled = true
+          )
+        )
+      )
+  );
+$function$;
+
+
 alter table public.employee_permissions enable row level security;
 revoke all on public.employee_permissions from anon, authenticated;
 grant select on public.employee_permissions to authenticated;
@@ -82,16 +126,18 @@ using (
       and caller.active = true
       and (
         (caller.role = 'branch_admin' and target.branch_id = caller.branch_id)
-        or exists (
-          select 1
-          from public.management_roles mr
-          join public.management_role_permissions mrp on mrp.role_id = mr.id
-          where mr.code = caller.role
-            and mr.organization_id = caller.organization_id
-            and mr.active = true
-            and mrp.permission_code = 'users.manage'
-            and mrp.enabled = true
-            and (mr.scope_branch_id is null or mr.scope_branch_id = target.branch_id)
+        or (
+          (select private.has_management_permission('users.manage'))
+          and (
+            not exists (
+              select 1 from public.management_roles scoped_role
+              where scoped_role.code = caller.role
+                and scoped_role.organization_id = caller.organization_id
+                and scoped_role.active = true
+                and scoped_role.scope_branch_id is not null
+            )
+            or caller.branch_id = target.branch_id
+          )
         )
       )
   )
