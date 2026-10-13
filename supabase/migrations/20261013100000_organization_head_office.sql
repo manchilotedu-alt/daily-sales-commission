@@ -27,6 +27,69 @@ where p.organization_id = b.organization_id
   and p.branch_id is null
   and p.role <> 'branch_admin';
 
+-- The permanent Head Office must not consume the regular branch quota.
+create or replace function public.enforce_branch_limit()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $
+declare
+  lim integer;
+  used integer;
+begin
+  if new.organization_id is null then
+    raise exception 'organization_id is required';
+  end if;
+
+  if coalesce(new.is_head_office, false) then
+    return new;
+  end if;
+
+  select branch_limit into lim
+  from public.organizations
+  where id = new.organization_id and active = true;
+
+  if lim is null then
+    raise exception 'Organization is missing or inactive';
+  end if;
+
+  select count(*) into used
+  from public.branches
+  where organization_id = new.organization_id
+    and coalesce(is_head_office, false) = false
+    and id <> coalesce(new.id, '00000000-0000-0000-0000-000000000000'::uuid);
+
+  if used >= lim then
+    raise exception 'Branch limit reached';
+  end if;
+
+  return new;
+end;
+$;
+
+create or replace function public.validate_branch_limit()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $
+declare
+  used integer;
+begin
+  select count(*) into used
+  from public.branches
+  where organization_id = new.id
+    and coalesce(is_head_office, false) = false;
+
+  if new.branch_limit < used then
+    raise exception 'Branch limit cannot be below existing branch count';
+  end if;
+
+  return new;
+end;
+$;
+
 create or replace function public.create_head_office_for_organization()
 returns trigger
 language plpgsql
