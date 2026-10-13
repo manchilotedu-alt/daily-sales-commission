@@ -165,10 +165,10 @@ Deno.serve(async req=>{
   if(re)throw re
 
   // The organization-level source policy overrides legacy per-product source values.
-  const sourcePolicyRule=(rules||[]).find((r:any)=>r.code==='organization_default_commission'&&r.product_id==null&&r.product_variant_id==null&&r.branch_id==null)
-  const sourcePolicyVersions:any[]=(sourcePolicyRule?.commission_rule_versions||[]).filter((v:any)=>['active','approved','expired'].includes(v.status)).sort((a:any,b:any)=>Number(b.version)-Number(a.version))
-  const sourcePolicyVersion=sourcePolicyVersions.find((v:any)=>String(v.effective_from).slice(0,10)<=saleDate&&(!v.effective_to||String(v.effective_to).slice(0,10)>=saleDate))||null
-  const configuredSource=sourcePolicyVersion?.sales_source??(!sourcePolicyVersions.length?sourcePolicyRule?.sales_source:null)
+  const organizationSourceRule=(rules||[]).find((r:any)=>r.code==='organization_default_commission'&&r.product_id==null&&r.product_variant_id==null&&r.branch_id==null)
+  const organizationSourceVersions:any[]=(organizationSourceRule?.commission_rule_versions||[]).filter((v:any)=>['active','approved','expired'].includes(v.status)).sort((a:any,b:any)=>Number(b.version)-Number(a.version))
+  const organizationSourceVersion=organizationSourceVersions.find((v:any)=>String(v.effective_from).slice(0,10)<=saleDate&&(!v.effective_to||String(v.effective_to).slice(0,10)>=saleDate))||null
+  const configuredSource=organizationSourceVersion?.sales_source??(!organizationSourceVersions.length?organizationSourceRule?.sales_source:null)
   const globalSalesSource=configuredSource==='system_sales'?'system_sales':'receipt_sales'
 
   const matchRule=(line:any)=>{
@@ -310,7 +310,7 @@ Deno.serve(async req=>{
    sale_date:saleDate,lead_id:leadRecipient?.id||null,assistant_id:assistantRecipient?.id||null,driver_id:driverRecipient?.id||null,
    submitted_by:caller.id,entered_by:caller.id,team_id:team.id,lead_employee_id:leadRecipient?.id||null,
    receipt_reference:receiptReference,system_sales_reference:systemSalesReference,system_sales_total:systemSalesTotal,
-   sales_source_policy_version_id:sourcePolicyVersion?.id||body.sales_source_policy_version_id||null,
+   sales_source_policy_version_id:body.sales_source_policy_version_id||null,
    team_structure_version_id:structure.id,team_split_version_id:splitVersion.id,
    total:totalSalesValue,total_quantity:totalQuantity,total_sales_value:totalSalesValue,gross_commission:grossCommission,
    lead_amt:leadAmt,assistant_amt:assistantAmt,driver_amt:driverAmt,status:'pending',
