@@ -99,6 +99,33 @@ as $function$
 $function$;
 
 
+-- Keep scoped management positions from reading profiles in other branches.
+drop policy if exists profiles_select_management_scope on public.profiles;
+create policy profiles_select_management_scope
+on public.profiles for select to authenticated
+using (
+  organization_id = (select public.current_organization_id())
+  and (
+    (select private.has_management_permission('users.manage'))
+    or (select private.has_management_permission('users.create'))
+    or (select private.has_management_permission('attendance.manage'))
+  )
+  and (
+    not exists (
+      select 1
+      from public.profiles caller
+      join public.management_roles scoped_role
+        on scoped_role.code = caller.role
+       and scoped_role.organization_id = caller.organization_id
+       and scoped_role.active = true
+      where caller.id = (select auth.uid())
+        and scoped_role.scope_branch_id is not null
+    )
+    or branch_id = (select public.current_branch_id())
+  )
+);
+
+
 alter table public.employee_permissions enable row level security;
 revoke all on public.employee_permissions from anon, authenticated;
 grant select on public.employee_permissions to authenticated;
