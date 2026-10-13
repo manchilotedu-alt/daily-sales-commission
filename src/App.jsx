@@ -1,6 +1,7 @@
 import React,{useEffect,useState} from 'react'
 import {supabase} from './lib/supabase'
 import {OrganizationManagement,UserManagement,ManagementRoles} from './Management'
+import {DepartmentManagement} from './DepartmentManagement'
 import {TeamManagement} from './TeamManagement'
 import {SalesPage} from './Sales'
 import {SalesReviewPage} from './SalesReview'
@@ -120,7 +121,7 @@ function OrganizationsAdminPage({currentUser}){
    <button type="button" onClick={()=>setSection('organizations')} className={section==='organizations'?'rounded-lg bg-emerald-400 px-4 py-2 text-sm font-bold text-slate-950':'rounded-lg px-4 py-2 text-sm font-semibold text-slate-300 hover:bg-white/5'}>ድርጅቶች እና ቅርንጫፎች</button>
    <button type="button" onClick={()=>setSection('employees')} className={section==='employees'?'rounded-lg bg-emerald-400 px-4 py-2 text-sm font-bold text-slate-950':'rounded-lg px-4 py-2 text-sm font-semibold text-slate-300 hover:bg-white/5'}>ሰራተኞች እና ሚናዎች</button>
   </div>
-  {section==='organizations'?<OrganizationManagement/>:<UserManagement currentUser={currentUser}/>}
+  {section==='organizations'?<><OrganizationManagement/><DepartmentManagement currentUser={currentUser}/></>:<UserManagement currentUser={currentUser}/>}
  </section>
 }
 
