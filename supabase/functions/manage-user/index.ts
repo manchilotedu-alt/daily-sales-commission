@@ -24,11 +24,13 @@ Deno.serve(async req=>{
    }
    return false
   }
-  const roleAllowed=async (role,organizationId)=>{
+  const roleAllowed=async (role,organizationId,branchId)=>{
    if(allowed.includes(role))return true
-   if(!global||!/^custom_[a-z0-9_]{2,48}$/.test(String(role||'')))return false
-   const {data,error}=await a.from('management_roles').select('id').eq('code',role).eq('organization_id',organizationId).eq('active',true).maybeSingle()
-   return !error&&!!data
+   if(!/^custom_[a-z0-9_]{2,48}$/.test(String(role||'')))return false
+   const {data,error}=await a.from('management_roles').select('id,scope_branch_id').eq('code',role).eq('organization_id',organizationId).eq('active',true).maybeSingle()
+   if(error||!data)return false
+   if(!global && data.scope_branch_id && data.scope_branch_id!==branchId)return false
+   return !data.scope_branch_id||data.scope_branch_id===branchId
   }
   if(body.action==='management_role'||body.action==='management_role_status'){
    if(!global)return out({error:'Only Super Admin/Admin can manage management roles'},403)
@@ -44,11 +46,16 @@ Deno.serve(async req=>{
    if(!/^custom_[a-z0-9_]{2,48}$/.test(code)||!nameAm)return out({error:'Valid custom role code and Amharic name are required'},400)
    let role
    if(body.role_id){
-    const roleUpdate={name_am:nameAm,name_en:body.name_en||null,description:body.description||null,updated_at:new Date().toISOString()}\n    if(Object.prototype.hasOwnProperty.call(body,'scope_branch_id'))roleUpdate.scope_branch_id=body.scope_branch_id||null\n    const {data,error}=await a.from('management_roles').update(roleUpdate).eq('id',body.role_id).eq('organization_id',body.organization_id).select('id,code').single()
+    const roleUpdate={name_am:nameAm,name_en:body.name_en||null,description:body.description||null,updated_at:new Date().toISOString()}
+    if(Object.prototype.hasOwnProperty.call(body,'scope_branch_id'))roleUpdate.scope_branch_id=body.scope_branch_id||null
+    const {data,error}=await a.from('management_roles').update(roleUpdate).eq('id',body.role_id).eq('organization_id',body.organization_id).select('id,code').single()
     if(error)throw error
     role=data
    }else{
-    const {data:errorBranchScope,error:scopeError}=body.scope_branch_id?await a.from('branches').select('id').eq('id',body.scope_branch_id).eq('organization_id',body.organization_id).eq('active',true).maybeSingle():{data:{id:null},error:null}\n    if(scopeError)throw scopeError\n    if(body.scope_branch_id&&!errorBranchScope)return out({error:'Position scope must be an active Head Office or branch in the selected organization'},400)\n    const {data,error}=await a.from('management_roles').insert({code,name_am:nameAm,name_en:body.name_en||null,description:body.description||null,organization_id:body.organization_id,scope_branch_id:body.scope_branch_id||null,created_by:caller.id,active:true}).select('id,code').single()
+    const {data:errorBranchScope,error:scopeError}=body.scope_branch_id?await a.from('branches').select('id').eq('id',body.scope_branch_id).eq('organization_id',body.organization_id).eq('active',true).maybeSingle():{data:{id:null},error:null}
+    if(scopeError)throw scopeError
+    if(body.scope_branch_id&&!errorBranchScope)return out({error:'Position scope must be an active Head Office or branch in the selected organization'},400)
+    const {data,error}=await a.from('management_roles').insert({code,name_am:nameAm,name_en:body.name_en||null,description:body.description||null,organization_id:body.organization_id,scope_branch_id:body.scope_branch_id||null,created_by:caller.id,active:true}).select('id,code').single()
     if(error)throw error
     role=data
    }
