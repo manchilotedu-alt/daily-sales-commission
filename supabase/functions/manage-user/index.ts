@@ -88,6 +88,8 @@ Deno.serve(async req=>{
    const org=global?body.organization_id:cp.organization_id,branch=(global?body.branch_id:cp.branch_id)||null;if(!org||!branch)return out({error:'Organization and Head Office/branch are required'},400)
    if(!global&&(org!==cp.organization_id||branch!==cp.branch_id))return out({error:'Forbidden'},403)
    const {data:b,error:branchError}=await a.from('branches').select('id,organization_id,active,is_head_office').eq('id',branch).maybeSingle();if(branchError)throw branchError;if(!b?.active||b.organization_id!==org)return out({error:'Invalid Head Office/branch'},400)
+   if(/^custom_(hr|finance|commission_manager|auditor|operations_manager|it_admin)_/.test(String(body.role||''))&&!b.is_head_office)return out({error:'This job position is available only at Head Office'},400)
+   if(/^custom_(sales_manager|branch_accountant|stock_manager|branch_manager)_/.test(String(body.role||''))&&b.is_head_office)return out({error:'This job position is available only at a branch'},400)
    if(body.role==='branch_admin'&&b.is_head_office)return out({error:'Branch Admin must be assigned to a regular branch, not Head Office'},400)
    if(body.role==='branch_admin'){const {data:x,error:xError}=await a.from('profiles').select('id').eq('branch_id',branch).eq('role','branch_admin').eq('active',true).limit(1);if(xError)throw xError;if(x?.length)return out({error:'This branch already has an active Branch Admin'},409)}
    const phone=normalize(body.phone);if(!/^\+2519\d{8}$/.test(phone))return out({error:'Valid Ethiopian phone number is required'},400)
@@ -114,6 +116,8 @@ Deno.serve(async req=>{
    let username=t.username||null;if(body.username!==undefined){username=String(body.username||'').trim().toLowerCase();if(!/^[a-z][a-z0-9._-]{2,31}$/.test(username))return out({error:'Username must start with a letter and contain 3–32 letters, numbers, dots, underscores, or hyphens'},400);const {data:usernameRows,error:usernameError}=await a.from('profiles').select('id').eq('username',username).neq('id',id).limit(1);if(usernameError)throw usernameError;if(usernameRows?.length)return out({error:'This username is already in use'},409)}
    if(!global&&(org!==cp.organization_id||branch!==cp.branch_id))return out({error:'Forbidden'},403)
    const {data:b,error:branchError}=await a.from('branches').select('id,organization_id,active,is_head_office').eq('id',branch).maybeSingle();if(branchError)throw branchError;if(!b?.active||b.organization_id!==org)return out({error:'Invalid Head Office/branch'},400)
+   if(/^custom_(hr|finance|commission_manager|auditor|operations_manager|it_admin)_/.test(String(body.role||''))&&!b.is_head_office)return out({error:'This job position is available only at Head Office'},400)
+   if(/^custom_(sales_manager|branch_accountant|stock_manager|branch_manager)_/.test(String(body.role||''))&&b.is_head_office)return out({error:'This job position is available only at a branch'},400)
    if(body.role==='branch_admin'&&b.is_head_office)return out({error:'Branch Admin must be assigned to a regular branch, not Head Office'},400)
    if(body.role==='branch_admin'){const {data:x,error:xError}=await a.from('profiles').select('id').eq('branch_id',branch).eq('role','branch_admin').eq('active',true).neq('id',id).limit(1);if(xError)throw xError;if(x?.length)return out({error:'This branch already has an active Branch Admin'},409)}
    const nextPhone=normalize(body.phone);if(!/^\+2519\d{8}$/.test(nextPhone))return out({error:'Valid Ethiopian phone number is required'},400)
