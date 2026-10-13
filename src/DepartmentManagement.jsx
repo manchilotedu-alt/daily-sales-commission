@@ -10,16 +10,21 @@ export function DepartmentManagement({currentUser}){
  const [code,setCode]=useState('')
  const [busy,setBusy]=useState(false)
  const [error,setError]=useState('')
- const [success,setSuccess]=useState('')
+ const [success,setSuccess]=useState(''),[schemaReady,setSchemaReady]=useState(false)
  const load=async()=>{
   const [orgResult,departmentResult]=await Promise.all([
    supabase.from('organizations').select('id,name,active').order('name'),
    supabase.from('organization_departments').select('id,organization_id,name,code,active,created_at').order('name')
   ])
   if(orgResult.error)throw orgResult.error
-  if(departmentResult.error)throw departmentResult.error
   setOrganizations(orgResult.data||[])
-  setDepartments(departmentResult.data||[])
+  if(departmentResult.error){
+   if(departmentResult.error.code==='42P01'||departmentResult.error.code==='PGRST205'||/organization_departments.*(does not exist|schema cache|could not find)/i.test(departmentResult.error.message||'')){
+    setDepartments([]);setSchemaReady(false);setError('የክፍል ስርዓቱን ለማንቃት Database migration መተግበር ያስፈልጋል። ድርጅትና ቅርንጫፍ አስተዳደር እንደቀድሞው ይሠራል።');return
+   }
+   throw departmentResult.error
+  }
+  setSchemaReady(true);setError('');setDepartments(departmentResult.data||[])
  }
  useEffect(()=>{if(canManage)load().catch(e=>setError(e.message||'የክፍሎች ዝርዝር መጫን አልተቻለም።'))},[canManage])
  const create=async e=>{
@@ -53,12 +58,13 @@ export function DepartmentManagement({currentUser}){
   <div><h2 className="text-xl font-bold">የድርጅት ክፍሎች</h2><p className="mt-1 text-sm text-zinc-500">እንደ Human Resources፣ Finance እና Operations ያሉ ክፍሎችን በድርጅታቸው ስር ይመዝግቡ።</p></div>
   {error&&<div role="alert" className="rounded-xl border border-rose-300 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-300">{error}</div>}
   {success&&<div role="status" className="rounded-xl border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300">{success}</div>}
-  <form onSubmit={create} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+  {!schemaReady&&<div className="rounded-xl border border-amber-300/40 bg-amber-500/5 p-4 text-sm text-amber-700 dark:text-amber-300">የክፍል ማስተዳደር ገጽ ተዘጋጅቷል፤ ግን Database migration እስኪተገበር ድረስ ክፍል መፍጠር/ማስተካከል አይነቃም።</div>}
+  {schemaReady&&<form onSubmit={create} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
    <select className="input" required value={organizationId} onChange={e=>setOrganizationId(e.target.value)}><option value="">ድርጅት ይምረጡ</option>{organizations.map(o=><option key={o.id} value={o.id} disabled={!o.active}>{o.name}{!o.active?' (ዝግ)':''}</option>)}</select>
    <input className="input" required maxLength={120} placeholder="የክፍል ስም (ለምሳሌ Finance)" value={name} onChange={e=>setName(e.target.value)}/>
    <input className="input" maxLength={40} placeholder="የክፍል ኮድ (አማራጭ)" value={code} onChange={e=>setCode(e.target.value)}/>
    <button className="btn" disabled={busy||!organizationId}>{busy?'በማስቀመጥ ላይ…':'ክፍል ጨምር'}</button>
-  </form>
-  <div className="space-y-2">{visible.map(d=><div key={d.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 p-3 dark:border-zinc-700"><div><div className="font-semibold">{d.name}</div><div className="text-xs text-zinc-500">{organizations.find(o=>o.id===d.organization_id)?.name||'ድርጅት'} · {d.code||'ኮድ የለውም'}</div></div><div className="flex items-center gap-2"><span className={d.active?'text-xs text-emerald-600':'text-xs text-zinc-500'}>{d.active?'ንቁ':'ዝግ'}</span><button type="button" disabled={busy} className="btn-secondary" onClick={()=>rename(d)}>ስም ቀይር</button><button type="button" disabled={busy} className="btn-secondary" onClick={()=>toggle(d)}>{d.active?'አቁም':'አንቃ'}</button></div></div>)}{visible.length===0&&<p className="rounded-xl border border-dashed p-4 text-sm text-zinc-500">ለዚህ ድርጅት የተመዘገበ ክፍል የለም።</p>}</div>
+  </form>}
+  {schemaReady&&<div className="space-y-2">{visible.map(d=><div key={d.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 p-3 dark:border-zinc-700"><div><div className="font-semibold">{d.name}</div><div className="text-xs text-zinc-500">{organizations.find(o=>o.id===d.organization_id)?.name||'ድርጅት'} · {d.code||'ኮድ የለውም'}</div></div><div className="flex items-center gap-2"><span className={d.active?'text-xs text-emerald-600':'text-xs text-zinc-500'}>{d.active?'ንቁ':'ዝግ'}</span><button type="button" disabled={busy} className="btn-secondary" onClick={()=>rename(d)}>ስም ቀይር</button><button type="button" disabled={busy} className="btn-secondary" onClick={()=>toggle(d)}>{d.active?'አቁም':'አንቃ'}</button></div></div>)}{visible.length===0&&<p className="rounded-xl border border-dashed p-4 text-sm text-zinc-500">ለዚህ ድርጅት የተመዘገበ ክፍል የለም።</p>}</div>}
  </section>
 }
