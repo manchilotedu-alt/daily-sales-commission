@@ -44,11 +44,11 @@ Deno.serve(async req=>{
    if(!/^custom_[a-z0-9_]{2,48}$/.test(code)||!nameAm)return out({error:'Valid custom role code and Amharic name are required'},400)
    let role
    if(body.role_id){
-    const {data,error}=await a.from('management_roles').update({name_am:nameAm,name_en:body.name_en||null,description:body.description||null,updated_at:new Date().toISOString()}).eq('id',body.role_id).eq('organization_id',body.organization_id).select('id,code').single()
+    const roleUpdate={name_am:nameAm,name_en:body.name_en||null,description:body.description||null,updated_at:new Date().toISOString()}\n    if(Object.prototype.hasOwnProperty.call(body,'scope_branch_id'))roleUpdate.scope_branch_id=body.scope_branch_id||null\n    const {data,error}=await a.from('management_roles').update(roleUpdate).eq('id',body.role_id).eq('organization_id',body.organization_id).select('id,code').single()
     if(error)throw error
     role=data
    }else{
-    const {data,error}=await a.from('management_roles').insert({code,name_am:nameAm,name_en:body.name_en||null,description:body.description||null,organization_id:body.organization_id,created_by:caller.id,active:true}).select('id,code').single()
+    const {data:errorBranchScope,error:scopeError}=body.scope_branch_id?await a.from('branches').select('id').eq('id',body.scope_branch_id).eq('organization_id',body.organization_id).eq('active',true).maybeSingle():{data:{id:null},error:null}\n    if(scopeError)throw scopeError\n    if(body.scope_branch_id&&!errorBranchScope)return out({error:'Position scope must be an active Head Office or branch in the selected organization'},400)\n    const {data,error}=await a.from('management_roles').insert({code,name_am:nameAm,name_en:body.name_en||null,description:body.description||null,organization_id:body.organization_id,scope_branch_id:body.scope_branch_id||null,created_by:caller.id,active:true}).select('id,code').single()
     if(error)throw error
     role=data
    }
@@ -58,7 +58,7 @@ Deno.serve(async req=>{
   }
   if(body.action==='create'){
    if(!global && !(await hasPerm('users.create')))return out({error:'የሰራተኛ መፍጠር ፍቃድ አልተሰጠዎትም'},403)
-   if(!(await roleAllowed(body.role,global?body.organization_id:cp.organization_id))||!String(body.full_name||'').trim()||!String(body.password||'').trim())return out({error:'Full name, role, and password are required'},400)
+   if(!(await roleAllowed(body.role,global?body.organization_id:cp.organization_id,(global?body.branch_id:cp.branch_id)))||!String(body.full_name||'').trim()||!String(body.password||'').trim())return out({error:'Full name, role, and password are required'},400)
    if(String(body.password).length<8)return out({error:'Password must be at least 8 characters'},400)
    const org=global?body.organization_id:cp.organization_id,branch=(global?body.branch_id:cp.branch_id)||null;if(!org||!branch)return out({error:'Organization and Head Office/branch are required'},400)
    if(!global&&(org!==cp.organization_id||branch!==cp.branch_id))return out({error:'Forbidden'},403)
@@ -83,7 +83,7 @@ Deno.serve(async req=>{
   if(body.action==='update'){
    const org=global?body.organization_id:cp.organization_id,branch=(global?body.branch_id:cp.branch_id)||null
    if(!org||!branch)return out({error:'Organization and Head Office/branch are required'},400)
-   if(!(await roleAllowed(body.role,global?body.organization_id:cp.organization_id))||!String(body.full_name||'').trim())return out({error:'Full name and valid role are required'},400)
+   if(!(await roleAllowed(body.role,global?body.organization_id:cp.organization_id,(global?body.branch_id:cp.branch_id)))||!String(body.full_name||'').trim())return out({error:'Full name and valid role are required'},400)
    if(!global&&(org!==cp.organization_id||branch!==cp.branch_id))return out({error:'Forbidden'},403)
    const {data:b,error:branchError}=await a.from('branches').select('id,organization_id,active,is_head_office').eq('id',branch).maybeSingle();if(branchError)throw branchError;if(!b?.active||b.organization_id!==org)return out({error:'Invalid Head Office/branch'},400)
    if(body.role==='branch_admin'&&b.is_head_office)return out({error:'Branch Admin must be assigned to a regular branch, not Head Office'},400)
