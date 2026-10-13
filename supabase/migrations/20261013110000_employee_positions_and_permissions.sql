@@ -258,7 +258,7 @@ do $seed_extra_positions$
 declare
   org record;
   template record;
-  role_id uuid;
+  v_role_id uuid;
   role_code text;
 begin
   for org in select id from public.organizations loop
@@ -276,12 +276,12 @@ begin
       values (role_code, template.name_am, org.id, true)
       on conflict (code) do nothing;
 
-      select id into role_id from public.management_roles
+      select id into v_role_id from public.management_roles
       where code = role_code and organization_id = org.id limit 1;
 
-      if role_id is not null then
+      if v_role_id is not null then
         insert into public.management_role_permissions(role_id, permission_code, enabled)
-        select role_id, p.code, p.code = any(template.permission_codes)
+        select v_role_id, p.code, p.code = any(template.permission_codes)
         from public.permissions p
         where p.active = true
         on conflict (role_id, permission_code) do nothing;
