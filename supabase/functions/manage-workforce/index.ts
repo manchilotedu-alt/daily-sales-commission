@@ -38,16 +38,7 @@ Deno.serve(async req=>{if(req.method==='OPTIONS')return new Response('ok',{heade
   return out({ok:true})
  }
  if(a==='record_attendance'){
-  if(me.role!=='branch_admin')return out({error:'Only Branch Manager can record attendance'},403)
-  const {data:e,error}=await db.from('profiles').select('id,organization_id,branch_id,employee_status,status_effective_date').eq('id',b.employee_id).single();if(error||!e)return out({error:'Employee not found'},404)
-  if(!globalRole(me.role)&&(e.organization_id!==me.organization_id||e.branch_id!==me.branch_id))return out({error:'Outside branch'},403)
-  const date=String(b.work_date||today()), {data:w}=await db.from('employee_daily_work_status').select('work_status').eq('employee_id',e.id).eq('work_date',date).maybeSingle()
-  if(w?.work_status==='rest_day')return out({error:'Attendance is blocked: this is a rest day'},409)
-  if(!['active','promoted'].includes(e.employee_status)&&date>=String(e.status_effective_date||date))return out({error:'Employee is inactive for this date'},409)
-  const s=String(b.attendance_status||'present');if(!['present','late','absent','leave','sick_leave','official_duty'].includes(s))return out({error:'Invalid attendance status'},400)
-  const {data:x,error:u}=await db.from('employee_attendance').upsert({organization_id:e.organization_id,branch_id:e.branch_id,employee_id:e.id,work_date:date,attendance_status:s,reason:String(b.reason||''),recorded_by:me.id},{onConflict:'employee_id,work_date'}).select('id').single();if(u)throw u
-  await db.from('audit_logs').insert({organization_id:e.organization_id,branch_id:e.branch_id,actor_id:me.id,action:'attendance_recorded',entity_type:'attendance',entity_id:x.id,after_data:{employee_id:e.id,work_date:date,status:s}})
-  return out({ok:true,attendance_id:x.id})
+  return out({error:'Attendance status is system-derived from the employee team assignment effective on the selected date. Do not manually mark present or absent; correct the effective-dated team assignment if the roster is wrong.'},409)
  }
  const attendanceDate=String(b.work_date||today())
  const validAttendanceDate=/^\d{4}-\d{2}-\d{2}$/.test(attendanceDate)&&!Number.isNaN(Date.parse(attendanceDate))
@@ -91,7 +82,7 @@ Deno.serve(async req=>{if(req.method==='OPTIONS')return new Response('ok',{heade
   const employees=staff.map((p:any)=>{
    const work:any=workMap.get(p.id), prior:any=existingMap.get(p.id)
    const rest=work?.work_status==='rest_day'
-   let status=rest?'rest_day':!assignedIds.has(p.id)?'absent':prior?.attendance_status||(work?.work_status==='leave'?'leave':work?.work_status==='official_duty'?'official_duty':'present')
+   let status=rest?'rest_day':!assignedIds.has(p.id)?'absent':(work?.work_status==='leave'?'leave':work?.work_status==='official_duty'?'official_duty':'present')
    return {employee_id:p.id,full_name:p.full_name,phone:p.phone,plate_number:p.plate_number,role:p.role,organization_id:p.organization_id,branch_id:p.branch_id,work_status:work?.work_status||'working',attendance_status:status,reason:prior?.reason||work?.reason||''}
   })
   return {employees,teams:activeTeams,date}
