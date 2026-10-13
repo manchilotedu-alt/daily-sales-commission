@@ -216,6 +216,9 @@ alter table public.profiles add column if not exists username text;
 create unique index if not exists profiles_username_lower_uq
   on public.profiles (lower(username))
   where username is not null and btrim(username) <> '';
+create index if not exists profiles_username_lookup_idx
+  on public.profiles (username)
+  where username is not null;
 
 -- Permission group used by the employee form's stock/inventory checkbox.
 insert into public.permissions (code, name_am, module, active)
