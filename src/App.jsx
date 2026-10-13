@@ -40,7 +40,7 @@ function errorText(e){
  const m=e?.message||''
  if(m==='ACCOUNT_DISABLED')return 'ይህ አካውንት ታግዷል።'
  if(m==='STAFF_ACCESS_RESTRICTED')return 'የሽያጭ ሠራተኞች በመተግበሪያው መግባት አይችሉም። ምደባና የኮሚሽን ስራ በቅርንጫፍ አስተዳዳሪ ይተዳደራል።'
- if(/invalid login credentials/i.test(m))return 'ስልክ ቁጥር ወይም የይለፍ ቃል ስህተት ነው።'
+ if(/invalid login credentials|invalid username or password/i.test(m))return 'Username፣ ስልክ ቁጥር ወይም የይለፍ ቃል ስህተት ነው።'
  if(/network|fetch/i.test(m))return 'የኢንተርኔት ግንኙነት ችግር አለ።'
  return m||'ስህተት ተከስቷል።'
 }
