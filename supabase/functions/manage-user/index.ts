@@ -60,17 +60,11 @@ Deno.serve(async req=>{
    if(!global && !(await hasPerm('users.create')))return out({error:'የሰራተኛ መፍጠር ፍቃድ አልተሰጠዎትም'},403)
    if(!(await roleAllowed(body.role,global?body.organization_id:cp.organization_id))||!String(body.full_name||'').trim()||!String(body.password||'').trim())return out({error:'Full name, role, and password are required'},400)
    if(String(body.password).length<8)return out({error:'Password must be at least 8 characters'},400)
-   const org=global?body.organization_id:cp.organization_id,branch=(global?body.branch_id:cp.branch_id)||null;if(!org)return out({error:'Organization is required'},400)
+   const org=global?body.organization_id:cp.organization_id,branch=(global?body.branch_id:cp.branch_id)||null;if(!org||!branch)return out({error:'Organization and Head Office/branch are required'},400)
    if(!global&&(org!==cp.organization_id||branch!==cp.branch_id))return out({error:'Forbidden'},403)
-   if(!branch){
-    if(body.role==='branch_admin')return out({error:'Branch Admin must be assigned to a branch'},400)
-    const {data:orgBranches,error:orgBranchesError}=await a.from('branches').select('id').eq('organization_id',org).eq('active',true).limit(1)
-    if(orgBranchesError)throw orgBranchesError
-    if(orgBranches?.length)return out({error:'Select a branch for this organization'},400)
-   }else{
-    const {data:b}=await a.from('branches').select('id,organization_id,active').eq('id',branch).maybeSingle();if(!b?.active||b.organization_id!==org)return out({error:'Invalid branch'},400)
-    if(body.role==='branch_admin'){const {data:x}=await a.from('profiles').select('id').eq('branch_id',branch).eq('role','branch_admin').eq('active',true).limit(1);if(x?.length)return out({error:'This branch already has an active Branch Admin'},409)}
-   }
+   const {data:b,error:branchError}=await a.from('branches').select('id,organization_id,active,is_head_office').eq('id',branch).maybeSingle();if(branchError)throw branchError;if(!b?.active||b.organization_id!==org)return out({error:'Invalid Head Office/branch'},400)
+   if(body.role==='branch_admin'&&b.is_head_office)return out({error:'Branch Admin must be assigned to a regular branch, not Head Office'},400)
+   if(body.role==='branch_admin'){const {data:x,error:xError}=await a.from('profiles').select('id').eq('branch_id',branch).eq('role','branch_admin').eq('active',true).limit(1);if(xError)throw xError;if(x?.length)return out({error:'This branch already has an active Branch Admin'},409)}
    const phone=normalize(body.phone);if(!/^\+2519\d{8}$/.test(phone))return out({error:'Valid Ethiopian phone number is required'},400)
    const plate=String(body.plate_number||'').trim();if(body.role==='driver'&&!plate)return out({error:'Vehicle plate number is required for a driver'},400)
    const {data:u,error:ue}=await a.auth.admin.createUser({phone,password:body.password,phone_confirm:true,user_metadata:{full_name:String(body.full_name).trim()}});if(ue)return out({error:ue.message},400)
@@ -88,18 +82,12 @@ Deno.serve(async req=>{
   if(body.action==='delete'){const {error}=await a.auth.admin.deleteUser(id);if(error)throw error;return out({ok:true})}
   if(body.action==='update'){
    const org=global?body.organization_id:cp.organization_id,branch=(global?body.branch_id:cp.branch_id)||null
-   if(!org)return out({error:'Organization is required'},400)
+   if(!org||!branch)return out({error:'Organization and Head Office/branch are required'},400)
    if(!(await roleAllowed(body.role,global?body.organization_id:cp.organization_id))||!String(body.full_name||'').trim())return out({error:'Full name and valid role are required'},400)
    if(!global&&(org!==cp.organization_id||branch!==cp.branch_id))return out({error:'Forbidden'},403)
-   if(!branch){
-    if(body.role==='branch_admin')return out({error:'Branch Admin must be assigned to a branch'},400)
-    const {data:orgBranches,error:orgBranchesError}=await a.from('branches').select('id').eq('organization_id',org).eq('active',true).limit(1)
-    if(orgBranchesError)throw orgBranchesError
-    if(orgBranches?.length)return out({error:'Select a branch for this organization'},400)
-   }else{
-    const {data:b}=await a.from('branches').select('id,organization_id,active').eq('id',branch).maybeSingle();if(!b?.active||b.organization_id!==org)return out({error:'Invalid branch'},400)
-    if(body.role==='branch_admin'){const {data:x}=await a.from('profiles').select('id').eq('branch_id',branch).eq('role','branch_admin').eq('active',true).neq('id',id).limit(1);if(x?.length)return out({error:'This branch already has an active Branch Admin'},409)}
-   }
+   const {data:b,error:branchError}=await a.from('branches').select('id,organization_id,active,is_head_office').eq('id',branch).maybeSingle();if(branchError)throw branchError;if(!b?.active||b.organization_id!==org)return out({error:'Invalid Head Office/branch'},400)
+   if(body.role==='branch_admin'&&b.is_head_office)return out({error:'Branch Admin must be assigned to a regular branch, not Head Office'},400)
+   if(body.role==='branch_admin'){const {data:x,error:xError}=await a.from('profiles').select('id').eq('branch_id',branch).eq('role','branch_admin').eq('active',true).neq('id',id).limit(1);if(xError)throw xError;if(x?.length)return out({error:'This branch already has an active Branch Admin'},409)}
    const nextPhone=normalize(body.phone);if(!/^\+2519\d{8}$/.test(nextPhone))return out({error:'Valid Ethiopian phone number is required'},400)
    const plate=String(body.plate_number||'').trim();if(body.role==='driver'&&!plate)return out({error:'Vehicle plate number is required for a driver'},400)
    const {error:ae}=await a.auth.admin.updateUserById(id,{phone:nextPhone});if(ae)throw ae
