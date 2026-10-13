@@ -29,8 +29,10 @@ async function loadProfile(id){
   supabase.from('management_role_permissions').select('permission_code,enabled,permissions(module,name_am)').eq('role_id',roleInfo.id).eq('enabled',true),
   supabase.from('employee_permissions').select('permission_code,enabled,permissions(module,name_am)').eq('user_id',id)
  ])
- if(rolePermResult.error||employeePermResult.error)throw rolePermResult.error||employeePermResult.error
- const employeeRows=employeePermResult.data||[]
+ if(rolePermResult.error)throw rolePermResult.error
+ const employeePermissionTableMissing=employeePermResult.error&&(employeePermResult.error.code==='42P01'||employeePermResult.error.code==='PGRST205'||/employee_permissions.*(does not exist|schema cache|could not find)/i.test(employeePermResult.error.message||''))
+ if(employeePermResult.error&&!employeePermissionTableMissing)throw employeePermResult.error
+ const employeeRows=employeePermissionTableMissing?[]:(employeePermResult.data||[])
  const effectivePermissions=employeeRows.length?employeeRows.filter(p=>p.enabled):rolePermResult.data||[]
  return {...data,management_role_name:roleInfo.name_am,management_permissions:effectivePermissions.map(p=>({permission_code:p.permission_code,module:p.permissions?.module||''}))}
 }
