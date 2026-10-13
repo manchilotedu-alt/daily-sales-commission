@@ -17,8 +17,14 @@ Deno.serve(async req=>{
     return !error&&data?.enabled===true
    }
    if(String(cp.role||'').startsWith('custom_')){
-    const {data:role,error:roleError}=await a.from('management_roles').select('id,organization_id').eq('code',cp.role).eq('organization_id',cp.organization_id).eq('active',true).maybeSingle()
-    if(roleError||!role)return false
+    const {data:employeeRows,error:employeeError}=await a.from('employee_permissions').select('permission_code,enabled').eq('user_id',caller.id)
+    const employeeTableMissing=employeeError&&(employeeError.code==='42P01'||employeeError.code==='PGRST205'||/employee_permissions.*(does not exist|schema cache|could not find)/i.test(employeeError.message||''))
+    if(employeeError&&!employeeTableMissing)return false
+    if(!employeeError&&(employeeRows||[]).length)return employeeRows.some(p=>p.permission_code===code&&p.enabled===true)
+    let roleResult=await a.from('management_roles').select('id,organization_id,scope_branch_id').eq('code',cp.role).eq('organization_id',cp.organization_id).eq('active',true).maybeSingle()
+    if(roleResult.error&&/scope_branch_id|schema cache|does not exist/i.test(roleResult.error.message||''))roleResult=await a.from('management_roles').select('id,organization_id').eq('code',cp.role).eq('organization_id',cp.organization_id).eq('active',true).maybeSingle()
+    const role=roleResult.data;if(roleResult.error||!role)return false
+    if(role.scope_branch_id&&role.scope_branch_id!==cp.branch_id)return false
     const {data,error}=await a.from('management_role_permissions').select('enabled').eq('role_id',role.id).eq('permission_code',code).maybeSingle()
     return !error&&data?.enabled===true
    }
