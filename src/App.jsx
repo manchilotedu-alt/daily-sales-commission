@@ -25,9 +25,14 @@ async function loadProfile(id){
  if(!String(data.role||'').startsWith('custom_'))throw new Error('STAFF_ACCESS_RESTRICTED')
  const {data:roleInfo,error:roleError}=await supabase.from('management_roles').select('id,code,name_am,active,organization_id').eq('code',data.role).eq('organization_id',data.organization_id).eq('active',true).maybeSingle()
  if(roleError||!roleInfo)throw new Error('STAFF_ACCESS_RESTRICTED')
- const {data:perms,error:permError}=await supabase.from('management_role_permissions').select('permission_code,enabled,permissions(module,name_am)').eq('role_id',roleInfo.id).eq('enabled',true)
- if(permError)throw permError
- return {...data,management_role_name:roleInfo.name_am,management_permissions:(perms||[]).map(p=>({permission_code:p.permission_code,module:p.permissions?.module||''}))}
+ const [rolePermResult,employeePermResult]=await Promise.all([
+  supabase.from('management_role_permissions').select('permission_code,enabled,permissions(module,name_am)').eq('role_id',roleInfo.id).eq('enabled',true),
+  supabase.from('employee_permissions').select('permission_code,enabled,permissions(module,name_am)').eq('user_id',id)
+ ])
+ if(rolePermResult.error||employeePermResult.error)throw rolePermResult.error||employeePermResult.error
+ const employeeRows=employeePermResult.data||[]
+ const effectivePermissions=employeeRows.length?employeeRows.filter(p=>p.enabled):rolePermResult.data||[]
+ return {...data,management_role_name:roleInfo.name_am,management_permissions:effectivePermissions.map(p=>({permission_code:p.permission_code,module:p.permissions?.module||''}))}
 }
 function errorText(e){
  const m=e?.message||''
