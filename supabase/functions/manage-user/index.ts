@@ -75,7 +75,7 @@ Deno.serve(async req=>{
    const phone=normalize(body.phone);if(!/^\+2519\d{8}$/.test(phone))return out({error:'Valid Ethiopian phone number is required'},400)
    const plate=String(body.plate_number||'').trim();if(body.role==='driver'&&!plate)return out({error:'Vehicle plate number is required for a driver'},400)
    const {data:u,error:ue}=await a.auth.admin.createUser({phone,password:body.password,phone_confirm:true,user_metadata:{full_name:String(body.full_name).trim()}});if(ue)return out({error:ue.message},400)
-   const {error:pe}=await a.from('profiles').upsert({id:u.user.id,full_name:String(body.full_name).trim(),phone,role:body.role,active:true,organization_id:org,branch_id:branch||null,plate_number:body.role==='driver'?plate:null});if(pe){await a.auth.admin.deleteUser(u.user.id);return out({error:pe.message},400)}
+   const {error:pe}=await a.from('profiles').upsert({id:u.user.id,full_name:String(body.full_name).trim(),phone,role:body.role,active:true,organization_id:org,branch_id:branch||null,department_id:body.department_id||null,plate_number:body.role==='driver'?plate:null});if(pe){await a.auth.admin.deleteUser(u.user.id);return out({error:pe.message},400)}
    return out({ok:true,user_id:u.user.id})
   }
   const id=body.user_id;if(!id)return out({error:'user_id is required'},400)
@@ -98,7 +98,7 @@ Deno.serve(async req=>{
    const nextPhone=normalize(body.phone);if(!/^\+2519\d{8}$/.test(nextPhone))return out({error:'Valid Ethiopian phone number is required'},400)
    const plate=String(body.plate_number||'').trim();if(body.role==='driver'&&!plate)return out({error:'Vehicle plate number is required for a driver'},400)
    const {error:ae}=await a.auth.admin.updateUserById(id,{phone:nextPhone});if(ae)throw ae
-   const {error:pe}=await a.from('profiles').update({full_name:String(body.full_name).trim(),phone:nextPhone,role:body.role,organization_id:org,branch_id:branch||null,plate_number:body.role==='driver'?plate:null}).eq('id',id)
+   const {error:pe}=await a.from('profiles').update({full_name:String(body.full_name).trim(),phone:nextPhone,role:body.role,organization_id:org,branch_id:branch||null,department_id:body.department_id||null,plate_number:body.role==='driver'?plate:null}).eq('id',id)
    if(pe){await a.auth.admin.updateUserById(id,{phone:t.phone||undefined}).catch(()=>{});throw pe}
    return out({ok:true})
   }
