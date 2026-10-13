@@ -255,6 +255,16 @@ Deno.serve(async req=>{
   if(recipients.filter((x:any)=>x.role==='lead').length!==1||recipients.filter((x:any)=>x.role==='driver').length!==1)
    return out({error:'The team must have one leader and one driver'},409)
   const pids=[...new Set(recipients.map((x:any)=>String(x.id)))]
+  const {data:effectiveAssignments,error:effectiveAssignmentError}=await admin.from('team_assignments')
+   .select('id,team_id,employee_id,effective_from,effective_to,assignment_status')
+   .in('employee_id',pids).eq('assignment_status','active').lte('effective_from',saleDate)
+   .or(`effective_to.is.null,effective_to.gte.${saleDate}`)
+  if(effectiveAssignmentError)throw effectiveAssignmentError
+  for(const employeeId of pids){
+   const activeForDate=(effectiveAssignments||[]).filter((a:any)=>a.employee_id===employeeId)
+   if(activeForDate.length!==1||activeForDate[0].team_id!==team.id)
+    return out({error:'Each employee must belong to exactly one active sales team on the sale date. Review the team roster before submitting this sale.'},409)
+  }
   const {data:people,error:peopleError}=await admin.from('profiles').select('id,role,active,organization_id,branch_id').in('id',pids)
   if(peopleError)throw peopleError
   if((people||[]).length!==pids.length)return out({error:'A team member no longer exists'},409)
