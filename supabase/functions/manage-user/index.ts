@@ -82,6 +82,8 @@ Deno.serve(async req=>{
   if(body.action==='create'){
    if(!global && !(await hasPerm('users.create')))return out({error:'የሰራተኛ መፍጠር ፍቃድ አልተሰጠዎትም'},403)
    if(!(await roleAllowed(body.role,global?body.organization_id:cp.organization_id,(global?body.branch_id:cp.branch_id)))||!String(body.full_name||'').trim()||!String(body.password||'').trim())return out({error:'Full name, role, and password are required'},400)
+   const username=String(body.username||'').trim().toLowerCase();if(!/^[a-z][a-z0-9._-]{2,31}$/.test(username))return out({error:'Username must start with a letter and contain 3–32 letters, numbers, dots, underscores, or hyphens'},400)
+   const {data:existingUsername,error:usernameError}=await a.from('profiles').select('id').eq('username',username).limit(1);if(usernameError)throw usernameError;if(existingUsername?.length)return out({error:'This username is already in use'},409)
    if(String(body.password).length<8)return out({error:'Password must be at least 8 characters'},400)
    const org=global?body.organization_id:cp.organization_id,branch=(global?body.branch_id:cp.branch_id)||null;if(!org||!branch)return out({error:'Organization and Head Office/branch are required'},400)
    if(!global&&(org!==cp.organization_id||branch!==cp.branch_id))return out({error:'Forbidden'},403)
@@ -91,13 +93,13 @@ Deno.serve(async req=>{
    const phone=normalize(body.phone);if(!/^\+2519\d{8}$/.test(phone))return out({error:'Valid Ethiopian phone number is required'},400)
    const plate=String(body.plate_number||'').trim();if(body.role==='driver'&&!plate)return out({error:'Vehicle plate number is required for a driver'},400)
    const {data:u,error:ue}=await a.auth.admin.createUser({phone,password:body.password,phone_confirm:true,user_metadata:{full_name:String(body.full_name).trim()}});if(ue)return out({error:ue.message},400)
-   const profileInsert={id:u.user.id,full_name:String(body.full_name).trim(),phone,role:body.role,active:true,organization_id:org,branch_id:branch||null,plate_number:body.role==='driver'?plate:null};if(body.department_id)profileInsert.department_id=body.department_id
+   const profileInsert={id:u.user.id,full_name:String(body.full_name).trim(),phone,username,role:body.role,active:true,organization_id:org,branch_id:branch||null,plate_number:body.role==='driver'?plate:null};if(body.department_id)profileInsert.department_id=body.department_id
    const {error:pe}=await a.from('profiles').upsert(profileInsert);if(pe){await a.auth.admin.deleteUser(u.user.id);return out({error:pe.message},400)}
    const permissionSaveError=await saveEmployeePermissions(u.user.id,body.employee_permissions);if(permissionSaveError){await a.auth.admin.deleteUser(u.user.id);return out({error:'Employee was not saved because permissions failed: '+permissionSaveError.message},400)}
    return out({ok:true,user_id:u.user.id})
   }
   const id=body.user_id;if(!id)return out({error:'user_id is required'},400)
-  const {data:t}=await a.from('profiles').select('role,phone,organization_id,branch_id,plate_number').eq('id',id).single();if(!t)return out({error:'User not found'},404)
+  const {data:t}=await a.from('profiles').select('role,phone,username,organization_id,branch_id,plate_number').eq('id',id).single();if(!t)return out({error:'User not found'},404)
   if(['super_admin','admin'].includes(t.role))return out({error:'Global administrators cannot be managed here'},403)
   if(!global && t.role==='branch_admin')return out({error:'Branch Admin accounts can only be managed by Super Admin/Admin'},403)
   if(!global&&(t.organization_id!==cp.organization_id||t.branch_id!==cp.branch_id))return out({error:'Forbidden'},403)
@@ -109,6 +111,7 @@ Deno.serve(async req=>{
    const org=global?body.organization_id:cp.organization_id,branch=(global?body.branch_id:cp.branch_id)||null
    if(!org||!branch)return out({error:'Organization and Head Office/branch are required'},400)
    if(!(await roleAllowed(body.role,global?body.organization_id:cp.organization_id,(global?body.branch_id:cp.branch_id)))||!String(body.full_name||'').trim())return out({error:'Full name and valid role are required'},400)
+   let username=t.username||null;if(body.username!==undefined){username=String(body.username||'').trim().toLowerCase();if(!/^[a-z][a-z0-9._-]{2,31}$/.test(username))return out({error:'Username must start with a letter and contain 3–32 letters, numbers, dots, underscores, or hyphens'},400);const {data:usernameRows,error:usernameError}=await a.from('profiles').select('id').eq('username',username).neq('id',id).limit(1);if(usernameError)throw usernameError;if(usernameRows?.length)return out({error:'This username is already in use'},409)}
    if(!global&&(org!==cp.organization_id||branch!==cp.branch_id))return out({error:'Forbidden'},403)
    const {data:b,error:branchError}=await a.from('branches').select('id,organization_id,active,is_head_office').eq('id',branch).maybeSingle();if(branchError)throw branchError;if(!b?.active||b.organization_id!==org)return out({error:'Invalid Head Office/branch'},400)
    if(body.role==='branch_admin'&&b.is_head_office)return out({error:'Branch Admin must be assigned to a regular branch, not Head Office'},400)
@@ -116,7 +119,7 @@ Deno.serve(async req=>{
    const nextPhone=normalize(body.phone);if(!/^\+2519\d{8}$/.test(nextPhone))return out({error:'Valid Ethiopian phone number is required'},400)
    const plate=String(body.plate_number||'').trim();if(body.role==='driver'&&!plate)return out({error:'Vehicle plate number is required for a driver'},400)
    const {error:ae}=await a.auth.admin.updateUserById(id,{phone:nextPhone});if(ae)throw ae
-   const profileUpdate={full_name:String(body.full_name).trim(),phone:nextPhone,role:body.role,organization_id:org,branch_id:branch||null,plate_number:body.role==='driver'?plate:null};if(body.department_id)profileUpdate.department_id=body.department_id
+   const profileUpdate={full_name:String(body.full_name).trim(),phone:nextPhone,role:body.role,organization_id:org,branch_id:branch||null,plate_number:body.role==='driver'?plate:null};if(body.username!==undefined)profileUpdate.username=username;if(body.department_id)profileUpdate.department_id=body.department_id
    const {error:pe}=await a.from('profiles').update(profileUpdate).eq('id',id)
    if(pe){await a.auth.admin.updateUserById(id,{phone:t.phone||undefined}).catch(()=>{});throw pe}
    const permissionSaveError=await saveEmployeePermissions(id,body.employee_permissions);if(permissionSaveError)return out({error:'Employee details were updated, but permissions were not saved: '+permissionSaveError.message},400)
