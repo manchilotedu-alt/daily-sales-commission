@@ -67,6 +67,12 @@ using (
   user_id = (select auth.uid())
   or public.is_super_admin()
   or exists (
+    select 1 from public.profiles global_caller
+    where global_caller.id = (select auth.uid())
+      and global_caller.active = true
+      and global_caller.role in ('super_admin', 'admin')
+  )
+  or exists (
     select 1 from public.profiles caller
     join public.profiles target
       on target.id = employee_permissions.user_id
@@ -112,6 +118,12 @@ create policy organization_departments_scoped_read
 on public.organization_departments for select to authenticated
 using (
   public.is_super_admin()
+  or exists (
+    select 1 from public.profiles global_caller
+    where global_caller.id = (select auth.uid())
+      and global_caller.active = true
+      and global_caller.role in ('super_admin', 'admin')
+  )
   or (
     active = true
     and organization_id = (select public.current_organization_id())
@@ -121,8 +133,24 @@ using (
 drop policy if exists organization_departments_admin_write on public.organization_departments;
 create policy organization_departments_admin_write
 on public.organization_departments for all to authenticated
-using (public.is_super_admin())
-with check (public.is_super_admin());
+using (
+  public.is_super_admin()
+  or exists (
+    select 1 from public.profiles global_caller
+    where global_caller.id = (select auth.uid())
+      and global_caller.active = true
+      and global_caller.role in ('super_admin', 'admin')
+  )
+)
+with check (
+  public.is_super_admin()
+  or exists (
+    select 1 from public.profiles global_caller
+    where global_caller.id = (select auth.uid())
+      and global_caller.active = true
+      and global_caller.role in ('super_admin', 'admin')
+  )
+);
 
 -- Username is a unique, case-insensitive sign-in alias; phone remains the Supabase Auth credential.
 alter table public.profiles add column if not exists username text;
