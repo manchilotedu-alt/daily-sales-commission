@@ -62,7 +62,6 @@ Deno.serve(async req=>{
    const rows=[...validCodes].map(permission_code=>({user_id:userId,permission_code,enabled:selected.has(permission_code),updated_by:caller.id,updated_at:new Date().toISOString()}))
    if(!rows.length)return null
    const {error}=await a.from('employee_permissions').upsert(rows,{onConflict:'user_id,permission_code'})
-   if(error&&selected.size===0&&(error.code==='42P01'||error.code==='PGRST205'||/employee_permissions.*(does not exist|schema cache|could not find)/i.test(error.message||'')))return null
    return error||null
   }
   const saveBranchAdminPermissions=async (userId,items)=>{
@@ -130,12 +129,12 @@ Deno.serve(async req=>{
    const {data:u,error:ue}=await a.auth.admin.createUser({phone,password:body.password,phone_confirm:true,user_metadata:{full_name:String(body.full_name).trim()}});if(ue)return out({error:ue.message},400)
    const profileInsert={id:u.user.id,full_name:String(body.full_name).trim(),phone,username,role:body.role,active:true,organization_id:org,branch_id:branch||null,plate_number:body.role==='driver'?plate:null};if(body.department_id)profileInsert.department_id=body.department_id
    const {error:pe}=await a.from('profiles').upsert(profileInsert);if(pe){await a.auth.admin.deleteUser(u.user.id);return out({error:pe.message},400)}
-   const permissionSaveError=await saveEmployeePermissions(u.user.id,body.employee_permissions);if(permissionSaveError){await a.auth.admin.deleteUser(u.user.id);return out({error:'Employee was not saved because permissions failed: '+permissionSaveError.message},400)}
+   const permissionSaveError=body.role==='branch_admin'?null:await saveEmployeePermissions(u.user.id,body.employee_permissions);if(permissionSaveError){await a.auth.admin.deleteUser(u.user.id);return out({error:'Employee was not saved because permissions failed: '+permissionSaveError.message},400)}
    if(body.role==='branch_admin'){const branchPermissionError=await saveBranchAdminPermissions(u.user.id,body.branch_admin_permissions);if(branchPermissionError){await a.auth.admin.deleteUser(u.user.id);return out({error:'Employee was not saved because branch permissions failed: '+branchPermissionError.message},400)}}
    return out({ok:true,user_id:u.user.id})
   }
   const id=body.user_id;if(!id)return out({error:'user_id is required'},400)
-  const {data:t}=await a.from('profiles').select('role,phone,username,organization_id,branch_id,plate_number').eq('id',id).single();if(!t)return out({error:'User not found'},404)
+  const {data:t}=await a.from('profiles').select('role,phone,username,organization_id,branch_id,plate_number,full_name,department_id,active').eq('id',id).single();if(!t)return out({error:'User not found'},404)
   if(['super_admin','admin'].includes(t.role))return out({error:'Global administrators cannot be managed here'},403)
   if(!global && t.role==='branch_admin')return out({error:'Branch Admin accounts can only be managed by Super Admin/Admin'},403)
   if(!global&&(t.organization_id!==cp.organization_id||!(await branchAccess(t.branch_id,'users.manage'))))return out({error:'Forbidden'},403)
@@ -161,8 +160,9 @@ Deno.serve(async req=>{
    const profileUpdate={full_name:String(body.full_name).trim(),phone:nextPhone,role:body.role,organization_id:org,branch_id:branch||null,plate_number:body.role==='driver'?plate:null};if(body.username!==undefined)profileUpdate.username=username;if(body.department_id!==undefined)profileUpdate.department_id=body.department_id||null
    const {error:pe}=await a.from('profiles').update(profileUpdate).eq('id',id)
    if(pe){await a.auth.admin.updateUserById(id,{phone:t.phone||undefined}).catch(()=>{});throw pe}
-   const permissionSaveError=await saveEmployeePermissions(id,body.employee_permissions);if(permissionSaveError)return out({error:'Employee details were updated, but permissions were not saved: '+permissionSaveError.message},400)
-   if(body.role==='branch_admin'){const branchPermissionError=await saveBranchAdminPermissions(id,body.branch_admin_permissions);if(branchPermissionError)return out({error:'Employee details were updated, but branch permissions were not saved: '+branchPermissionError.message},400)}
+   const rollbackProfile=async()=>{await a.from('profiles').update({full_name:t.full_name,phone:t.phone,username:t.username,role:t.role,organization_id:t.organization_id,branch_id:t.branch_id,plate_number:t.plate_number,department_id:t.department_id,active:t.active}).eq('id',id);if(t.phone)await a.auth.admin.updateUserById(id,{phone:t.phone}).catch(()=>{})}
+   const permissionSaveError=body.role==='branch_admin'?null:await saveEmployeePermissions(id,body.employee_permissions);if(permissionSaveError){await rollbackProfile();return out({error:'Employee details and permissions were not saved. Previous employee details were restored. '+permissionSaveError.message},400)}
+   if(body.role==='branch_admin'){const branchPermissionError=await saveBranchAdminPermissions(id,body.branch_admin_permissions);if(branchPermissionError){await rollbackProfile();return out({error:'Employee details and branch permissions were not saved. Previous employee details were restored. '+branchPermissionError.message},400)}}
    return out({ok:true})
   }
   return out({error:'Unknown action'},400)
