@@ -160,9 +160,16 @@ Deno.serve(async req=>{
 
   // Commission rules are independent from price. A rule may match product/variant through conditions JSON.
   const {data:rules,error:re}=await admin.from('commission_rules')
-   .select('id,name,rule_type,basis,price_dependency,sales_source,product_id,product_variant_id,branch_id,priority,status,commission_rule_versions(id,version,effective_from,effective_to,fixed_amount,rate_percent,status,rule_type,basis,sales_source,commission_rule_tiers(id,min_value,max_value,rate_percent,fixed_amount,tier_order))')
+   .select('id,name,code,rule_type,basis,price_dependency,sales_source,product_id,product_variant_id,branch_id,priority,status,commission_rule_versions(id,version,effective_from,effective_to,fixed_amount,rate_percent,status,rule_type,basis,sales_source,commission_rule_tiers(id,min_value,max_value,rate_percent,fixed_amount,tier_order))')
    .eq('organization_id',org).eq('active',true)
   if(re)throw re
+
+  // The organization-level source policy overrides legacy per-product source values.
+  const sourcePolicyRule=(rules||[]).find((r:any)=>r.code==='organization_default_commission'&&r.product_id==null&&r.product_variant_id==null&&r.branch_id==null)
+  const sourcePolicyVersions:any[]=(sourcePolicyRule?.commission_rule_versions||[]).filter((v:any)=>['active','approved','expired'].includes(v.status)).sort((a:any,b:any)=>Number(b.version)-Number(a.version))
+  const sourcePolicyVersion=sourcePolicyVersions.find((v:any)=>String(v.effective_from).slice(0,10)<=saleDate&&(!v.effective_to||String(v.effective_to).slice(0,10)>=saleDate))||null
+  const configuredSource=sourcePolicyVersion?.sales_source??(!sourcePolicyVersions.length?sourcePolicyRule?.sales_source:null)
+  const globalSalesSource=configuredSource==='system_sales'?'system_sales':'receipt_sales'
 
   const matchRule=(line:any)=>{
    const candidates:any[]=[]
@@ -187,7 +194,7 @@ Deno.serve(async req=>{
    if(matched){
     const {r,v}=matched
     const basis=v.basis||r.basis
-    const salesSource=(v.sales_source||r.sales_source)==='system_sales'?'system_sales':'receipt_sales'
+    const salesSource=globalSalesSource
     const ruleType=v.rule_type||r.rule_type
     const sourceSalesValue=salesSource==='system_sales'?line.system_sales_value:line.line_amt
     const base=basis==='quantity'?line.qty:basis==='unit_price'?(salesSource==='system_sales'?sourceSalesValue/Math.max(1,line.qty):line.rate):sourceSalesValue
@@ -206,7 +213,7 @@ Deno.serve(async req=>{
    }else{
     // No configured rule means no commission, never invent a commission from product price.
     line.commission_rule_version_id=null
-    line.commission_sales_source='receipt_sales'
+    line.commission_sales_source=globalSalesSource
    }
    line.commission_amount=money(Math.max(0,commission))
    grossCommission=money(grossCommission+line.commission_amount)
@@ -303,7 +310,7 @@ Deno.serve(async req=>{
    sale_date:saleDate,lead_id:leadRecipient?.id||null,assistant_id:assistantRecipient?.id||null,driver_id:driverRecipient?.id||null,
    submitted_by:caller.id,entered_by:caller.id,team_id:team.id,lead_employee_id:leadRecipient?.id||null,
    receipt_reference:receiptReference,system_sales_reference:systemSalesReference,system_sales_total:systemSalesTotal,
-   sales_source_policy_version_id:body.sales_source_policy_version_id||null,
+   sales_source_policy_version_id:sourcePolicyVersion?.id||body.sales_source_policy_version_id||null,
    team_structure_version_id:structure.id,team_split_version_id:splitVersion.id,
    total:totalSalesValue,total_quantity:totalQuantity,total_sales_value:totalSalesValue,gross_commission:grossCommission,
    lead_amt:leadAmt,assistant_amt:assistantAmt,driver_amt:driverAmt,status:'pending',
