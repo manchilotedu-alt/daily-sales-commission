@@ -43,6 +43,7 @@ Deno.serve(async req=>{
    const rows=[...validCodes].map(permission_code=>({user_id:userId,permission_code,enabled:selected.has(permission_code),updated_by:caller.id,updated_at:new Date().toISOString()}))
    if(!rows.length)return null
    const {error}=await a.from('employee_permissions').upsert(rows,{onConflict:'user_id,permission_code'})
+   if(error&&selected.size===0&&(error.code==='42P01'||error.code==='PGRST205'||/employee_permissions.*(does not exist|schema cache|could not find)/i.test(error.message||'')))return null
    return error||null
   }
   if(body.action==='management_role'||body.action==='management_role_status'){
