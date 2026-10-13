@@ -65,12 +65,12 @@ Deno.serve(async req=>{if(req.method==='OPTIONS')return new Response('ok',{heade
   const staff=(people||[]).filter((p:any)=>p.branch_id&&activeTeams.some((t:any)=>t.branch_id===p.branch_id&&t.organization_id===p.organization_id))
   if(!staff.length)return {employees:[],teams:activeTeams,date}
   const ids=staff.map((p:any)=>p.id)
-  const {data:structures,error:se}=await db.from('team_structures').select('id,team_id,effective_from,effective_to,status,team_structure_roles(role_code,required_count)').in('team_id',teamIds).lte('effective_from',date).or(`effective_to.is.null,effective_to.gte.${date}`).order('effective_from',{ascending:false})
+  const {data:structures,error:se}=await db.from('team_structures').select('id,team_id,effective_from,effective_to,status,team_structure_roles(role_code,required_count)').in('team_id',teamIds).eq('status','active').lte('effective_from',date).or(`effective_to.is.null,effective_to.gte.${date}`).order('effective_from',{ascending:false})
   if(se)throw se
   const structureCounts=new Map<string,any>()
   for(const s of structures||[])if(!structureCounts.has(s.team_id))structureCounts.set(s.team_id,(s.team_structure_roles||[]).reduce((acc:any,r:any)=>({...acc,[r.role_code]:Number(r.required_count)}),{}))
   if(activeTeams.some((t:any)=>!structureCounts.has(t.id)))throw new Error('At least one active team has no effective structure for this date; attendance was not changed')
-  const {data:assignments,error:ae}=await db.from('team_assignments').select('id,team_id,employee_id,team_role,employee_position,effective_from,effective_to,created_at').in('team_id',teamIds).lte('effective_from',date).or(`effective_to.is.null,effective_to.gte.${date}`).order('created_at',{ascending:false})
+  const {data:assignments,error:ae}=await db.from('team_assignments').select('id,team_id,employee_id,team_role,employee_position,effective_from,effective_to,created_at').in('team_id',teamIds).eq('assignment_status','active').lte('effective_from',date).or(`effective_to.is.null,effective_to.gte.${date}`).order('created_at',{ascending:false})
   if(ae)throw ae
   const currentByPosition=new Map<string,any>()
   for(const x of assignments||[]){
@@ -90,7 +90,7 @@ Deno.serve(async req=>{if(req.method==='OPTIONS')return new Response('ok',{heade
    const work:any=workMap.get(p.id), prior:any=existingMap.get(p.id)
    const rest=work?.work_status==='rest_day'
    let status=rest?'rest_day':work?.work_status==='leave'?'leave':work?.work_status==='official_duty'?'official_duty':assignedIds.has(p.id)?'present':'absent'
-   if(prior?.attendance_status)status=prior.attendance_status
+   if(prior?.attendance_status&&!rest)status=prior.attendance_status
    return {employee_id:p.id,full_name:p.full_name,phone:p.phone,plate_number:p.plate_number,role:p.role,organization_id:p.organization_id,branch_id:p.branch_id,work_status:work?.work_status||'working',attendance_status:status,reason:prior?.reason||work?.reason||''}
   })
   return {employees,teams:activeTeams,date}
