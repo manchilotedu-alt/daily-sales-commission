@@ -224,9 +224,10 @@ Deno.serve(async req=>{
    .select('id,organization_id,branch_id,status').eq('id',body.team_id).single()
   if(teamError||!team)return out({error:'Sales team was not found'},404)
   if(team.organization_id!==org||team.branch_id!==branch)return out({error:'Sales team is outside this branch'},403)
+  if(team.status!=='active')return out({error:'The selected sales team is not active'},409)
   const {data:assignmentRows,error:assignmentError}=await admin.from('team_assignments')
    .select('id,employee_id,team_role,employee_position,effective_from,effective_to,created_at')
-   .eq('team_id',team.id).lte('effective_from',saleDate)
+   .eq('team_id',team.id).eq('assignment_status','active').lte('effective_from',saleDate)
    .or(`effective_to.is.null,effective_to.gte.${saleDate}`).order('created_at',{ascending:false})
   if(assignmentError)throw assignmentError
   const latestByPosition=new Map<string,any>()
@@ -236,7 +237,7 @@ Deno.serve(async req=>{
   }
   const {data:structureRows,error:structureError}=await admin.from('team_structures')
    .select('id,version,status,effective_from,effective_to,team_structure_roles(role_code,required_count)')
-   .eq('team_id',team.id).lte('effective_from',saleDate)
+   .eq('team_id',team.id).eq('status','active').lte('effective_from',saleDate)
    .or(`effective_to.is.null,effective_to.gte.${saleDate}`).order('effective_from',{ascending:false}).order('created_at',{ascending:false}).limit(1)
   if(structureError)throw structureError
   const structure=structureRows?.[0]
