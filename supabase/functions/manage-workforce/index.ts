@@ -91,8 +91,7 @@ Deno.serve(async req=>{if(req.method==='OPTIONS')return new Response('ok',{heade
   const employees=staff.map((p:any)=>{
    const work:any=workMap.get(p.id), prior:any=existingMap.get(p.id)
    const rest=work?.work_status==='rest_day'
-   let status=rest?'rest_day':work?.work_status==='leave'?'leave':work?.work_status==='official_duty'?'official_duty':assignedIds.has(p.id)?'present':'absent'
-   if(prior?.attendance_status&&!rest)status=prior.attendance_status
+   let status=rest?'rest_day':!assignedIds.has(p.id)?'absent':prior?.attendance_status||(work?.work_status==='leave'?'leave':work?.work_status==='official_duty'?'official_duty':'present')
    return {employee_id:p.id,full_name:p.full_name,phone:p.phone,plate_number:p.plate_number,role:p.role,organization_id:p.organization_id,branch_id:p.branch_id,work_status:work?.work_status||'working',attendance_status:status,reason:prior?.reason||work?.reason||''}
   })
   return {employees,teams:activeTeams,date}
