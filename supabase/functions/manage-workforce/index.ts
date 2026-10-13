@@ -29,6 +29,7 @@ Deno.serve(async req=>{if(req.method==='OPTIONS')return new Response('ok',{heade
   return out({ok:true})
  }
  if(a==='set_daily_work_status'){
+  if(me.role!=='branch_admin')return out({error:'Only Branch Manager can record daily work status'},403)
   const {data:e,error}=await db.from('profiles').select('id,organization_id,branch_id,employee_status').eq('id',b.employee_id).single();if(error||!e)return out({error:'Employee not found'},404)
   if(!globalRole(me.role)&&(e.organization_id!==me.organization_id||e.branch_id!==me.branch_id))return out({error:'Outside branch'},403)
   const s=String(b.work_status), date=String(b.work_date||today());if(!['working','rest_day','leave','official_duty'].includes(s))return out({error:'Invalid work status'},400)
@@ -37,6 +38,7 @@ Deno.serve(async req=>{if(req.method==='OPTIONS')return new Response('ok',{heade
   return out({ok:true})
  }
  if(a==='record_attendance'){
+  if(me.role!=='branch_admin')return out({error:'Only Branch Manager can record attendance'},403)
   const {data:e,error}=await db.from('profiles').select('id,organization_id,branch_id,employee_status,status_effective_date').eq('id',b.employee_id).single();if(error||!e)return out({error:'Employee not found'},404)
   if(!globalRole(me.role)&&(e.organization_id!==me.organization_id||e.branch_id!==me.branch_id))return out({error:'Outside branch'},403)
   const date=String(b.work_date||today()), {data:w}=await db.from('employee_daily_work_status').select('work_status').eq('employee_id',e.id).eq('work_date',date).maybeSingle()
@@ -100,7 +102,7 @@ Deno.serve(async req=>{if(req.method==='OPTIONS')return new Response('ok',{heade
   try{return out({ok:true,...await attendanceScope(attendanceDate)})}catch(e){return out({error:e?.message||'Unable to load attendance roster'},409)}
  }
  if(a==='save_team_attendance'||a==='sync_team_attendance'){
-  if(!globalRole(me.role)&&me.role!=='branch_admin')return out({error:'Attendance management access required'},403)
+  if(me.role!=='branch_admin')return out({error:'Only Branch Manager can save team attendance'},403)
   if(a==='sync_team_attendance'&&me.role!=='branch_admin')return out({error:'Only Branch Admin can sync branch attendance'},403)
   if(!validAttendanceDate)return out({error:'Invalid attendance date'},400)
   let roster:any
