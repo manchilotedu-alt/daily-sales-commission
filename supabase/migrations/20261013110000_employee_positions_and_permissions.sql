@@ -73,14 +73,27 @@ using (
       and global_caller.role in ('super_admin', 'admin')
   )
   or exists (
-    select 1 from public.profiles caller
+    select 1
+    from public.profiles caller
     join public.profiles target
       on target.id = employee_permissions.user_id
      and target.organization_id = caller.organization_id
-     and target.branch_id = caller.branch_id
     where caller.id = (select auth.uid())
       and caller.active = true
-      and caller.role = 'branch_admin'
+      and (
+        (caller.role = 'branch_admin' and target.branch_id = caller.branch_id)
+        or exists (
+          select 1
+          from public.management_roles mr
+          join public.management_role_permissions mrp on mrp.role_id = mr.id
+          where mr.code = caller.role
+            and mr.organization_id = caller.organization_id
+            and mr.active = true
+            and mrp.permission_code = 'users.manage'
+            and mrp.enabled = true
+            and (mr.scope_branch_id is null or mr.scope_branch_id = target.branch_id)
+        )
+      )
   )
 );
 
