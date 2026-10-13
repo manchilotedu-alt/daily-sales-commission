@@ -35,7 +35,7 @@ Deno.serve(async req=>{
   }
   const saveEmployeePermissions=async (userId,items)=>{
    if(!Array.isArray(items))return null
-   const {data:allPermissions,error:permissionError}=await a.from('permissions').select('code')
+   const {data:allPermissions,error:permissionError}=await a.from('permissions').select('code').eq('active',true)
    if(permissionError)return permissionError
    const selected=new Set(items.filter(p=>p&&typeof p.permission_code==='string'&&p.enabled===true).map(p=>p.permission_code))
    const validCodes=new Set((allPermissions||[]).map(p=>p.code))
@@ -45,6 +45,18 @@ Deno.serve(async req=>{
    if(!rows.length)return null
    const {error}=await a.from('employee_permissions').upsert(rows,{onConflict:'user_id,permission_code'})
    if(error&&selected.size===0&&(error.code==='42P01'||error.code==='PGRST205'||/employee_permissions.*(does not exist|schema cache|could not find)/i.test(error.message||'')))return null
+   return error||null
+  }
+  const saveBranchAdminPermissions=async (userId,items)=>{
+   if(!Array.isArray(items))return null
+   const {data:allPermissions,error:permissionError}=await a.from('permissions').select('code').eq('active',true)
+   if(permissionError)return permissionError
+   const selected=new Set(items.filter(p=>p&&typeof p.permission_code==='string'&&p.enabled===true).map(p=>p.permission_code))
+   const validCodes=new Set((allPermissions||[]).map(p=>p.code))
+   if([...selected].some(code=>!validCodes.has(code)))return new Error('Invalid branch-admin permission code')
+   const rows=[...validCodes].map(permission_code=>({user_id:userId,permission_code,enabled:selected.has(permission_code),updated_by:caller.id,updated_at:new Date().toISOString()}))
+   if(!rows.length)return null
+   const {error}=await a.from('branch_admin_permissions').upsert(rows,{onConflict:'user_id,permission_code'})
    return error||null
   }
   if(body.action==='management_role'||body.action==='management_role_status'){
@@ -98,6 +110,7 @@ Deno.serve(async req=>{
    const profileInsert={id:u.user.id,full_name:String(body.full_name).trim(),phone,username,role:body.role,active:true,organization_id:org,branch_id:branch||null,plate_number:body.role==='driver'?plate:null};if(body.department_id)profileInsert.department_id=body.department_id
    const {error:pe}=await a.from('profiles').upsert(profileInsert);if(pe){await a.auth.admin.deleteUser(u.user.id);return out({error:pe.message},400)}
    const permissionSaveError=await saveEmployeePermissions(u.user.id,body.employee_permissions);if(permissionSaveError){await a.auth.admin.deleteUser(u.user.id);return out({error:'Employee was not saved because permissions failed: '+permissionSaveError.message},400)}
+   if(body.role==='branch_admin'){const branchPermissionError=await saveBranchAdminPermissions(u.user.id,body.branch_admin_permissions);if(branchPermissionError){await a.auth.admin.deleteUser(u.user.id);return out({error:'Employee was not saved because branch permissions failed: '+branchPermissionError.message},400)}}
    return out({ok:true,user_id:u.user.id})
   }
   const id=body.user_id;if(!id)return out({error:'user_id is required'},400)
@@ -127,6 +140,7 @@ Deno.serve(async req=>{
    const {error:pe}=await a.from('profiles').update(profileUpdate).eq('id',id)
    if(pe){await a.auth.admin.updateUserById(id,{phone:t.phone||undefined}).catch(()=>{});throw pe}
    const permissionSaveError=await saveEmployeePermissions(id,body.employee_permissions);if(permissionSaveError)return out({error:'Employee details were updated, but permissions were not saved: '+permissionSaveError.message},400)
+   if(body.role==='branch_admin'){const branchPermissionError=await saveBranchAdminPermissions(id,body.branch_admin_permissions);if(branchPermissionError)return out({error:'Employee details were updated, but branch permissions were not saved: '+branchPermissionError.message},400)}
    return out({ok:true})
   }
   return out({error:'Unknown action'},400)
