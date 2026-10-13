@@ -1,0 +1,7 @@
+project_id = "cfjdhbldbmrzfgwzeran"
+
+# Username login must be callable before the user has an authenticated session.
+# The function performs its own generic username/password validation and uses
+# Supabase Auth to issue the normal session. Other functions keep the default.
+[functions.username-login]
+verify_jwt = false
