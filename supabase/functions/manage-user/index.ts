@@ -28,6 +28,7 @@ Deno.serve(async req=>{
    if(allowed.includes(role))return true
    if(!/^custom_[a-z0-9_]{2,48}$/.test(String(role||'')))return false
    const {data,error}=await a.from('management_roles').select('id,scope_branch_id').eq('code',role).eq('organization_id',organizationId).eq('active',true).maybeSingle()
+   if(error&&(/scope_branch_id|schema cache|does not exist/i.test(error.message||''))){const {data:legacyRole,error:legacyError}=await a.from('management_roles').select('id').eq('code',role).eq('organization_id',organizationId).eq('active',true).maybeSingle();return !legacyError&&!!legacyRole}
    if(error||!data)return false
    if(!global && data.scope_branch_id && data.scope_branch_id!==branchId)return false
    return !data.scope_branch_id||data.scope_branch_id===branchId
@@ -69,7 +70,8 @@ Deno.serve(async req=>{
     const {data:errorBranchScope,error:scopeError}=body.scope_branch_id?await a.from('branches').select('id').eq('id',body.scope_branch_id).eq('organization_id',body.organization_id).eq('active',true).maybeSingle():{data:{id:null},error:null}
     if(scopeError)throw scopeError
     if(body.scope_branch_id&&!errorBranchScope)return out({error:'Position scope must be an active Head Office or branch in the selected organization'},400)
-    const {data,error}=await a.from('management_roles').insert({code,name_am:nameAm,name_en:body.name_en||null,description:body.description||null,organization_id:body.organization_id,scope_branch_id:body.scope_branch_id||null,created_by:caller.id,active:true}).select('id,code').single()
+    const roleInsert={code,name_am:nameAm,name_en:body.name_en||null,description:body.description||null,organization_id:body.organization_id,created_by:caller.id,active:true};if(body.scope_branch_id)roleInsert.scope_branch_id=body.scope_branch_id
+    const {data,error}=await a.from('management_roles').insert(roleInsert).select('id,code').single()
     if(error)throw error
     role=data
    }
@@ -89,7 +91,8 @@ Deno.serve(async req=>{
    const phone=normalize(body.phone);if(!/^\+2519\d{8}$/.test(phone))return out({error:'Valid Ethiopian phone number is required'},400)
    const plate=String(body.plate_number||'').trim();if(body.role==='driver'&&!plate)return out({error:'Vehicle plate number is required for a driver'},400)
    const {data:u,error:ue}=await a.auth.admin.createUser({phone,password:body.password,phone_confirm:true,user_metadata:{full_name:String(body.full_name).trim()}});if(ue)return out({error:ue.message},400)
-   const {error:pe}=await a.from('profiles').upsert({id:u.user.id,full_name:String(body.full_name).trim(),phone,role:body.role,active:true,organization_id:org,branch_id:branch||null,department_id:body.department_id||null,plate_number:body.role==='driver'?plate:null});if(pe){await a.auth.admin.deleteUser(u.user.id);return out({error:pe.message},400)}
+   const profileInsert={id:u.user.id,full_name:String(body.full_name).trim(),phone,role:body.role,active:true,organization_id:org,branch_id:branch||null,plate_number:body.role==='driver'?plate:null};if(body.department_id)profileInsert.department_id=body.department_id
+   const {error:pe}=await a.from('profiles').upsert(profileInsert);if(pe){await a.auth.admin.deleteUser(u.user.id);return out({error:pe.message},400)}
    const permissionSaveError=await saveEmployeePermissions(u.user.id,body.employee_permissions);if(permissionSaveError){await a.auth.admin.deleteUser(u.user.id);return out({error:'Employee was not saved because permissions failed: '+permissionSaveError.message},400)}
    return out({ok:true,user_id:u.user.id})
   }
@@ -113,7 +116,8 @@ Deno.serve(async req=>{
    const nextPhone=normalize(body.phone);if(!/^\+2519\d{8}$/.test(nextPhone))return out({error:'Valid Ethiopian phone number is required'},400)
    const plate=String(body.plate_number||'').trim();if(body.role==='driver'&&!plate)return out({error:'Vehicle plate number is required for a driver'},400)
    const {error:ae}=await a.auth.admin.updateUserById(id,{phone:nextPhone});if(ae)throw ae
-   const {error:pe}=await a.from('profiles').update({full_name:String(body.full_name).trim(),phone:nextPhone,role:body.role,organization_id:org,branch_id:branch||null,department_id:body.department_id||null,plate_number:body.role==='driver'?plate:null}).eq('id',id)
+   const profileUpdate={full_name:String(body.full_name).trim(),phone:nextPhone,role:body.role,organization_id:org,branch_id:branch||null,plate_number:body.role==='driver'?plate:null};if(body.department_id)profileUpdate.department_id=body.department_id
+   const {error:pe}=await a.from('profiles').update(profileUpdate).eq('id',id)
    if(pe){await a.auth.admin.updateUserById(id,{phone:t.phone||undefined}).catch(()=>{});throw pe}
    const permissionSaveError=await saveEmployeePermissions(id,body.employee_permissions);if(permissionSaveError)return out({error:'Employee details were updated, but permissions were not saved: '+permissionSaveError.message},400)
    return out({ok:true})
