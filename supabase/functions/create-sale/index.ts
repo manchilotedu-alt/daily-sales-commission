@@ -160,9 +160,16 @@ Deno.serve(async req=>{
 
   // Commission rules are independent from price. A rule may match product/variant through conditions JSON.
   const {data:rules,error:re}=await admin.from('commission_rules')
-   .select('id,name,rule_type,basis,price_dependency,sales_source,product_id,product_variant_id,branch_id,priority,status,commission_rule_versions(id,version,effective_from,effective_to,fixed_amount,rate_percent,status,rule_type,basis,sales_source,commission_rule_tiers(id,min_value,max_value,rate_percent,fixed_amount,tier_order))')
+   .select('id,name,code,rule_type,basis,price_dependency,sales_source,product_id,product_variant_id,branch_id,priority,status,commission_rule_versions(id,version,effective_from,effective_to,fixed_amount,rate_percent,status,rule_type,basis,sales_source,commission_rule_tiers(id,min_value,max_value,rate_percent,fixed_amount,tier_order))')
    .eq('organization_id',org).eq('active',true)
   if(re)throw re
+
+  // The organization-level source policy overrides legacy per-product source values.
+  const organizationSourceRule=(rules||[]).find((r:any)=>r.code==='organization_default_commission'&&r.product_id==null&&r.product_variant_id==null&&r.branch_id==null)
+  const organizationSourceVersions:any[]=(organizationSourceRule?.commission_rule_versions||[]).filter((v:any)=>['active','approved','expired'].includes(v.status)).sort((a:any,b:any)=>Number(b.version)-Number(a.version))
+  const organizationSourceVersion=organizationSourceVersions.find((v:any)=>String(v.effective_from).slice(0,10)<=saleDate&&(!v.effective_to||String(v.effective_to).slice(0,10)>=saleDate))||null
+  const configuredSource=organizationSourceVersion?.sales_source??(!organizationSourceVersions.length?organizationSourceRule?.sales_source:null)
+  const globalSalesSource=configuredSource==='system_sales'?'system_sales':'receipt_sales'
 
   const matchRule=(line:any)=>{
    const candidates:any[]=[]
@@ -187,7 +194,7 @@ Deno.serve(async req=>{
    if(matched){
     const {r,v}=matched
     const basis=v.basis||r.basis
-    const salesSource=(v.sales_source||r.sales_source)==='system_sales'?'system_sales':'receipt_sales'
+    const salesSource=globalSalesSource
     const ruleType=v.rule_type||r.rule_type
     const sourceSalesValue=salesSource==='system_sales'?line.system_sales_value:line.line_amt
     const base=basis==='quantity'?line.qty:basis==='unit_price'?(salesSource==='system_sales'?sourceSalesValue/Math.max(1,line.qty):line.rate):sourceSalesValue
@@ -206,7 +213,7 @@ Deno.serve(async req=>{
    }else{
     // No configured rule means no commission, never invent a commission from product price.
     line.commission_rule_version_id=null
-    line.commission_sales_source='receipt_sales'
+    line.commission_sales_source=globalSalesSource
    }
    line.commission_amount=money(Math.max(0,commission))
    grossCommission=money(grossCommission+line.commission_amount)
@@ -217,9 +224,10 @@ Deno.serve(async req=>{
    .select('id,organization_id,branch_id,status').eq('id',body.team_id).single()
   if(teamError||!team)return out({error:'Sales team was not found'},404)
   if(team.organization_id!==org||team.branch_id!==branch)return out({error:'Sales team is outside this branch'},403)
+  if(team.status!=='active')return out({error:'The selected sales team is not active'},409)
   const {data:assignmentRows,error:assignmentError}=await admin.from('team_assignments')
    .select('id,employee_id,team_role,employee_position,effective_from,effective_to,created_at')
-   .eq('team_id',team.id).lte('effective_from',saleDate)
+   .eq('team_id',team.id).eq('assignment_status','active').lte('effective_from',saleDate)
    .or(`effective_to.is.null,effective_to.gte.${saleDate}`).order('created_at',{ascending:false})
   if(assignmentError)throw assignmentError
   const latestByPosition=new Map<string,any>()
@@ -229,7 +237,7 @@ Deno.serve(async req=>{
   }
   const {data:structureRows,error:structureError}=await admin.from('team_structures')
    .select('id,version,status,effective_from,effective_to,team_structure_roles(role_code,required_count)')
-   .eq('team_id',team.id).lte('effective_from',saleDate)
+   .eq('team_id',team.id).eq('status','active').lte('effective_from',saleDate)
    .or(`effective_to.is.null,effective_to.gte.${saleDate}`).order('effective_from',{ascending:false}).order('created_at',{ascending:false}).limit(1)
   if(structureError)throw structureError
   const structure=structureRows?.[0]
@@ -247,6 +255,16 @@ Deno.serve(async req=>{
   if(recipients.filter((x:any)=>x.role==='lead').length!==1||recipients.filter((x:any)=>x.role==='driver').length!==1)
    return out({error:'The team must have one leader and one driver'},409)
   const pids=[...new Set(recipients.map((x:any)=>String(x.id)))]
+  const {data:effectiveAssignments,error:effectiveAssignmentError}=await admin.from('team_assignments')
+   .select('id,team_id,employee_id,effective_from,effective_to,assignment_status')
+   .in('employee_id',pids).eq('assignment_status','active').lte('effective_from',saleDate)
+   .or(`effective_to.is.null,effective_to.gte.${saleDate}`)
+  if(effectiveAssignmentError)throw effectiveAssignmentError
+  for(const employeeId of pids){
+   const activeForDate=(effectiveAssignments||[]).filter((a:any)=>a.employee_id===employeeId)
+   if(activeForDate.length!==1||activeForDate[0].team_id!==team.id)
+    return out({error:'Each employee must belong to exactly one active sales team on the sale date. Review the team roster before submitting this sale.'},409)
+  }
   const {data:people,error:peopleError}=await admin.from('profiles').select('id,role,active,organization_id,branch_id').in('id',pids)
   if(peopleError)throw peopleError
   if((people||[]).length!==pids.length)return out({error:'A team member no longer exists'},409)

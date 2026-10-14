@@ -37,7 +37,8 @@ export function WorkforceManagement({currentUser}){
  const branchAdmin=currentUser.role==='branch_admin'
  const permissions=currentUser.management_permissions||[]
  const orgWide=global||(String(currentUser.role||'').startsWith('custom_')&&permissions.some(p=>p.permission_code==='attendance.manage'))
- const canManageAttendance=global||branchAdmin||permissions.some(p=>p.permission_code==='attendance.manage')
+ const canViewAttendance=global||branchAdmin||permissions.some(p=>['attendance.view','attendance.manage'].includes(p.permission_code))
+ const canManageAttendance=branchAdmin||permissions.some(p=>p.permission_code==='attendance.manage')
  const canSeePerformance=global||branchAdmin||permissions.some(p=>['sales.review','commission.view','earnings.view','performance.view','reports.export'].includes(p.permission_code))
  const [users,setUsers]=useState([])
  const [branches,setBranches]=useState([])
@@ -79,7 +80,7 @@ export function WorkforceManagement({currentUser}){
  }
 
  const loadRoster=async()=>{
-  if(!canManageAttendance){setAttendanceRows([]);return}
+  if(!canViewAttendance){setAttendanceRows([]);return}
   try{
    const r=await act({action:'get_team_attendance_roster',work_date:date})
    const rows=r.employees||[]

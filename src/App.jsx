@@ -1,6 +1,7 @@
 import React,{useEffect,useState} from 'react'
 import {supabase} from './lib/supabase'
 import {OrganizationManagement,UserManagement,ManagementRoles} from './Management'
+import {DepartmentManagement} from './DepartmentManagement'
 import {TeamManagement} from './TeamManagement'
 import {SalesPage} from './Sales'
 import {SalesReviewPage} from './SalesReview'
@@ -20,19 +21,31 @@ async function loadProfile(id){
  const {data,error}=await supabase.from('profiles').select('*').eq('id',id).single()
  if(error)throw error
  if(!data.active)throw new Error('ACCOUNT_DISABLED')
- if(['super_admin','admin','branch_admin'].includes(data.role))return data
+ if(['super_admin','admin'].includes(data.role))return data
+ if(data.role==='branch_admin'){
+  const {data:rows,error:permissionError}=await supabase.from('branch_admin_permissions').select('permission_code,enabled').eq('user_id',id).eq('enabled',true)
+  if(permissionError)throw permissionError
+  return {...data,management_permissions:(rows||[]).map(p=>({permission_code:p.permission_code}))}
+}
  if(!String(data.role||'').startsWith('custom_'))throw new Error('STAFF_ACCESS_RESTRICTED')
  const {data:roleInfo,error:roleError}=await supabase.from('management_roles').select('id,code,name_am,active,organization_id').eq('code',data.role).eq('organization_id',data.organization_id).eq('active',true).maybeSingle()
  if(roleError||!roleInfo)throw new Error('STAFF_ACCESS_RESTRICTED')
- const {data:perms,error:permError}=await supabase.from('management_role_permissions').select('permission_code,enabled,permissions(module,name_am)').eq('role_id',roleInfo.id).eq('enabled',true)
- if(permError)throw permError
- return {...data,management_role_name:roleInfo.name_am,management_permissions:(perms||[]).map(p=>({permission_code:p.permission_code,module:p.permissions?.module||''}))}
+ const [rolePermResult,employeePermResult]=await Promise.all([
+  supabase.from('management_role_permissions').select('permission_code,enabled,permissions(module,name_am)').eq('role_id',roleInfo.id).eq('enabled',true),
+  supabase.from('employee_permissions').select('permission_code,enabled,permissions(module,name_am)').eq('user_id',id)
+ ])
+ if(rolePermResult.error)throw rolePermResult.error
+ const employeePermissionTableMissing=employeePermResult.error&&(employeePermResult.error.code==='42P01'||employeePermResult.error.code==='PGRST205'||/employee_permissions.*(does not exist|schema cache|could not find)/i.test(employeePermResult.error.message||''))
+ if(employeePermResult.error&&!employeePermissionTableMissing)throw employeePermResult.error
+ const employeeRows=employeePermissionTableMissing?[]:(employeePermResult.data||[])
+ const effectivePermissions=employeeRows.length?employeeRows.filter(p=>p.enabled):rolePermResult.data||[]
+ return {...data,management_role_name:roleInfo.name_am,management_permissions:effectivePermissions.map(p=>({permission_code:p.permission_code,module:p.permissions?.module||''}))}
 }
 function errorText(e){
  const m=e?.message||''
  if(m==='ACCOUNT_DISABLED')return 'ይህ አካውንት ታግዷል።'
  if(m==='STAFF_ACCESS_RESTRICTED')return 'የሽያጭ ሠራተኞች በመተግበሪያው መግባት አይችሉም። ምደባና የኮሚሽን ስራ በቅርንጫፍ አስተዳዳሪ ይተዳደራል።'
- if(/invalid login credentials/i.test(m))return 'ስልክ ቁጥር ወይም የይለፍ ቃል ስህተት ነው።'
+ if(/invalid login credentials|invalid username or password/i.test(m))return 'Username፣ ስልክ ቁጥር ወይም የይለፍ ቃል ስህተት ነው።'
  if(/network|fetch/i.test(m))return 'የኢንተርኔት ግንኙነት ችግር አለ።'
  return m||'ስህተት ተከስቷል።'
 }
@@ -43,8 +56,8 @@ function ProductsPage({user}){
  const branchAdmin=user?.role==='branch_admin'
  const [orgs,setOrgs]=useState([]),[branches,setBranches]=useState([]),[selectedOrg,setSelectedOrg]=useState(user?.organization_id||''),[rows,setRows]=useState([]),[assigned,setAssigned]=useState([]),[selected,setSelected]=useState(null),[variants,setVariants]=useState([]),[prices,setPrices]=useState([])
  const [error,setError]=useState(''),[form,setForm]=useState({code:'',am:'',en:'',rate:''}),[variant,setVariant]=useState({code:'',am:'',en:'',unit:''}),[price,setPrice]=useState({value:'',from:''}),[saving,setSaving]=useState(false)
- const [commission,setCommission]=useState({method:'percentage',basis:'sales_amount',salesSource:'receipt_sales',value:'',effective_from:new Date().toISOString().slice(0,10)}),[tiers,setTiers]=useState([{min:'0',max:'',method:'percentage',value:''}]),[commissionRules,setCommissionRules]=useState([]),[commissionBusy,setCommissionBusy]=useState(false)
- const loadCommission=async productId=>{if(!productId){setCommissionRules([]);setCommission(prev=>({...prev,salesSource:'receipt_sales'}));return}const {data,error}=await supabase.from('commission_rules').select('id,name,rule_type,basis,price_dependency,sales_source,product_id,product_variant_id,active,status,commission_rule_versions(id,version,effective_from,effective_to,fixed_amount,rate_percent,rule_type,basis,sales_source,status,created_at,approved_by,commission_rule_tiers(id,min_value,max_value,rate_percent,fixed_amount,tier_order))').eq('organization_id',targetOrg).eq('product_id',productId).is('product_variant_id',null).order('name');if(error){setError(error.message);setCommissionRules([])}else{const list=data||[];setCommissionRules(list);const rule=list.find(x=>x.status==='active')||list[0];const versions=(rule?.commission_rule_versions||[]).slice().sort((a,b)=>b.version-a.version);const active=versions.find(v=>['active','approved'].includes(v.status))||versions[0];const method=rule?.rule_type==='fixed_amount'?'fixed':rule?.rule_type==='tiered'||rule?.rule_type==='price_range'?'tiered':rule?.rule_type==='no_commission'?'none':'percentage';setCommission(prev=>({...prev,method,basis:rule?.basis||'sales_amount',salesSource:rule?.sales_source||'receipt_sales',value:active?.rate_percent??active?.fixed_amount??'',effective_from:new Date().toISOString().slice(0,10)}));const savedTiers=(active?.commission_rule_tiers||[]).slice().sort((a,b)=>a.tier_order-b.tier_order);setTiers(savedTiers.length?savedTiers.map(t=>({min:String(t.min_value),max:t.max_value==null?'':String(t.max_value),method:t.rate_percent!=null?'percentage':'fixed',value:String(t.rate_percent??t.fixed_amount??'')})):[{min:'0',max:'',method:'percentage',value:''}])}}
+ const [commission,setCommission]=useState({method:'percentage',basis:'sales_amount',value:'',effective_from:new Date().toISOString().slice(0,10)}),[tiers,setTiers]=useState([{min:'0',max:'',method:'percentage',value:''}]),[commissionRules,setCommissionRules]=useState([]),[commissionBusy,setCommissionBusy]=useState(false)
+ const loadCommission=async productId=>{if(!productId){setCommissionRules([]);return}const {data,error}=await supabase.from('commission_rules').select('id,name,rule_type,basis,price_dependency,sales_source,product_id,product_variant_id,active,status,commission_rule_versions(id,version,effective_from,effective_to,fixed_amount,rate_percent,rule_type,basis,sales_source,status,created_at,approved_by,commission_rule_tiers(id,min_value,max_value,rate_percent,fixed_amount,tier_order))').eq('organization_id',targetOrg).eq('product_id',productId).is('product_variant_id',null).order('name');if(error){setError(error.message);setCommissionRules([])}else{const list=data||[];setCommissionRules(list);const rule=list.find(x=>x.status==='active')||list[0];const versions=(rule?.commission_rule_versions||[]).slice().sort((a,b)=>b.version-a.version);const active=versions.find(v=>['active','approved'].includes(v.status))||versions[0];const method=rule?.rule_type==='fixed_amount'?'fixed':rule?.rule_type==='tiered'||rule?.rule_type==='price_range'?'tiered':rule?.rule_type==='no_commission'?'none':'percentage';setCommission(prev=>({...prev,method,basis:rule?.basis||'sales_amount',value:active?.rate_percent??active?.fixed_amount??'',effective_from:new Date().toISOString().slice(0,10)}));const savedTiers=(active?.commission_rule_tiers||[]).slice().sort((a,b)=>a.tier_order-b.tier_order);setTiers(savedTiers.length?savedTiers.map(t=>({min:String(t.min_value),max:t.max_value==null?'':String(t.max_value),method:t.rate_percent!=null?'percentage':'fixed',value:String(t.rate_percent??t.fixed_amount??'')})):[{min:'0',max:'',method:'percentage',value:''}])}}
  const saveCommission=async e=>{
   e.preventDefault();if(!global||!selected||!targetOrg)return;
   const method=commission.method,value=Number(commission.value),ruleType=method==='fixed'?'fixed_amount':method==='tiered'?'tiered':method==='none'?'no_commission':'percentage';
@@ -65,13 +78,13 @@ function ProductsPage({user}){
    // Validate the effective date before changing the parent rule to avoid partial updates.
    if(!start)throw new Error('የሚጀምርበትን ቀን ያስገቡ።');
    if(latest&&start<=String(latest.effective_from).slice(0,10))throw new Error('አዲሱ የሚጀምርበት ቀን ከቀድሞው ስሪት ቀን በኋላ መሆን አለበት።');
-   const rulePayload={rule_type:ruleType,basis:commission.basis,price_dependency:'independent',sales_source:commission.salesSource,priority:10,status:'active',active:true,updated_at:new Date().toISOString()};
+   const rulePayload={rule_type:ruleType,basis:commission.basis,price_dependency:'independent',priority:10,status:'active',active:true,updated_at:new Date().toISOString()};
    if(!rule){const {data,error}=await supabase.from('commission_rules').insert({organization_id:targetOrg,product_id:selected.id,name:productName+' commission',code:'product_'+selected.id+'_commission',...rulePayload,created_by:user.id}).select().single();if(error)throw error;rule=data}
    else{const {data,error}=await supabase.from('commission_rules').update(rulePayload).eq('id',rule.id).select().single();if(error)throw error;rule={...rule,...data}}
    // Use UTC boundaries and close the previous version before the new effective date.
    const effectiveFrom=new Date(start+'T00:00:00.000Z').toISOString();
    const previousEffectiveTo=new Date(Date.parse(effectiveFrom)-1).toISOString();
-   const {data:newVersion,error:insertError}=await supabase.from('commission_rule_versions').insert({commission_rule_id:rule.id,version:nextVersion,effective_from:effectiveFrom,fixed_amount:method==='fixed'?value:null,rate_percent:method==='percentage'?value:null,rule_type:ruleType,basis:commission.basis,sales_source:commission.salesSource,status:'draft',created_by:user.id,submitted_by:user.id,submitted_at:new Date().toISOString(),approved_by:user.id,approved_at:new Date().toISOString()}).select().single();
+   const {data:newVersion,error:insertError}=await supabase.from('commission_rule_versions').insert({commission_rule_id:rule.id,version:nextVersion,effective_from:effectiveFrom,fixed_amount:method==='fixed'?value:null,rate_percent:method==='percentage'?value:null,rule_type:ruleType,basis:commission.basis,status:'draft',created_by:user.id,submitted_by:user.id,submitted_at:new Date().toISOString(),approved_by:user.id,approved_at:new Date().toISOString()}).select().single();
    if(insertError)throw insertError;
    if(method==='tiered'){const rows=cleanTiers.map(t=>({commission_rule_version_id:newVersion.id,min_value:t.min,max_value:t.max,rate_percent:t.method==='percentage'?t.value:null,fixed_amount:t.method==='fixed'?t.value:null,tier_order:t.tier_order}));const {error:tierError}=await supabase.from('commission_rule_tiers').insert(rows);if(tierError)throw tierError}
    if(latest){const {error}=await supabase.from('commission_rule_versions').update({effective_to:previousEffectiveTo,status:'expired'}).eq('id',latest.id);if(error)throw error}
@@ -103,24 +116,24 @@ function ProductsPage({user}){
  <div className="rounded-2xl border bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900"><div className="mb-3 flex items-center justify-between gap-3"><div><h3 className="font-bold">የምርት ኮሚሽን</h3><p className="text-xs text-zinc-500">ይህ የምርቱ መደበኛ ኮሚሽን ነው፤ ለወደፊት ሽያጮች ይሠራል፣ ቀድሞ የተመዘገቡ ሽያጮችን አይቀይርም። ለአንድ ሽያጭ ብቻ ማስተካከያ በየሽያጭ ማረጋገጫ ዝርዝር ውስጥ ይደረጋል።</p></div><span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">{commissionRules.length} rules</span></div>{global?<form onSubmit={saveCommission} className="grid gap-3 sm:grid-cols-2">
 <label className="text-xs font-semibold text-zinc-500">የኮሚሽን አይነት<select className="input mt-1" value={commission.method} onChange={e=>setCommission({...commission,method:e.target.value,value:''})}><option value="percentage">በመቶኛ (%)</option><option value="fixed">ቋሚ ኮሚሽን (ETB)</option><option value="tiered">በብዛት/ክልል የሚለያይ</option><option value="none">ኮሚሽን የለውም</option></select></label>
 <label className="text-xs font-semibold text-zinc-500">የስሌት መነሻ<select className="input mt-1" value={commission.basis} onChange={e=>setCommission({...commission,basis:e.target.value})}><option value="sales_amount">የሽያጭ ጠቅላላ ዋጋ</option><option value="quantity">የእቃ ብዛት</option><option value="unit_price">የአንድ እቃ ዋጋ</option></select></label>
-<label className="text-xs font-semibold text-zinc-500">የኮሚሽን መነሻ ሽያጭ<select className="input mt-1" value={commission.salesSource} onChange={e=>setCommission({...commission,salesSource:e.target.value})}><option value="receipt_sales">የደረሰኝ ሽያጭ</option><option value="system_sales">የውጭ ሲስተም ሽያጭ</option></select></label>
+<div className="rounded-xl bg-zinc-50 p-3 text-sm text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">የኮሚሽን መነሻ ሽያጭ በዋና አድሚኑ በኮሚሽን ገጽ ይወሰናል።</div>
 {(commission.method==='percentage'||commission.method==='fixed')&&<label className="text-xs font-semibold text-zinc-500">መጠን {commission.method==='percentage'?'(%)':'(ብር)'}<input className="input mt-1" type="number" min="0" max={commission.method==='percentage'?'100':undefined} step="0.01" required value={commission.value} onChange={e=>setCommission({...commission,value:e.target.value})} placeholder={commission.method==='percentage'?'ለምሳሌ 3':'ለምሳሌ 5 ብር'}/></label>}
 {commission.method==='tiered'&&<div className="sm:col-span-2 rounded-xl border p-3 dark:border-zinc-700"><div className="mb-3 flex items-center justify-between gap-2"><div><b>የብዛት/የዋጋ ክልል ሕጎች</b><p className="text-xs text-zinc-500">ክልሎች አይደራረቡ፤ የመጨረሻ ክልል ከፍተኛ ገደብ ሳይኖረው ሊቀር ይችላል።</p></div><button type="button" className="btn-secondary" onClick={()=>setTiers(prev=>[...prev,{min:'',max:'',method:'percentage',value:''}])}>ክልል ጨምር</button></div><div className="space-y-2">{tiers.map((t,i)=><div key={i} className="grid gap-2 sm:grid-cols-5"><input className="input" type="number" min="0" step="0.01" value={t.min} onChange={e=>setTiers(prev=>prev.map((x,j)=>i===j?{...x,min:e.target.value}:x))} placeholder="ከ (min)"/><input className="input" type="number" min="0" step="0.01" value={t.max} onChange={e=>setTiers(prev=>prev.map((x,j)=>i===j?{...x,max:e.target.value}:x))} placeholder="እስከ (max)"/><select className="input" value={t.method} onChange={e=>setTiers(prev=>prev.map((x,j)=>i===j?{...x,method:e.target.value,value:''}:x))}><option value="percentage">መቶኛ (%)</option><option value="fixed">ቋሚ ብር</option></select><input className="input" type="number" min="0" max={t.method==='percentage'?'100':undefined} step="0.01" value={t.value} onChange={e=>setTiers(prev=>prev.map((x,j)=>i===j?{...x,value:e.target.value}:x))} placeholder="ኮሚሽን"/><button type="button" className="btn-secondary" disabled={tiers.length===1} onClick={()=>setTiers(prev=>prev.filter((_,j)=>i!==j))}>አስወግድ</button></div>)}</div></div>}
 <label className="text-xs font-semibold text-zinc-500">የሚጀምርበት ቀን<input className="input mt-1" type="date" required value={commission.effective_from} onChange={e=>setCommission({...commission,effective_from:e.target.value})}/></label>
-<button className="btn sm:col-span-2" disabled={commissionBusy}>{commissionBusy?'በመመዝገብ ላይ…':'የኮሚሽን ስሪት መዝግብ'}</button></form>:<p className="rounded-xl bg-zinc-50 p-3 text-sm dark:bg-zinc-800">የኮሚሽን ማስተካከያ ስልጣን ለዋና አስተዳዳሪ ብቻ ነው።</p>}<div className="mt-4 space-y-3">{commissionRules.map(rule=><div key={rule.id} className="rounded-xl border p-3 dark:border-zinc-700"><div className="font-semibold">{rule.name}</div><div className="mt-1 text-xs text-zinc-500">ሽያጭ፦ {rule.sales_source==='system_sales'?'የውጭ ሲስተም':'የደረሰኝ'} · መነሻ፦ {rule.basis==='quantity'?'ብዛት':rule.basis==='unit_price'?'የአንድ እቃ ዋጋ':'ጠቅላላ ዋጋ'} · አይነት፦ {rule.rule_type==='fixed_amount'?'ቋሚ':rule.rule_type==='tiered'||rule.rule_type==='price_range'?'ክልል':rule.rule_type==='no_commission'?'ኮሚሽን የለም':'መቶኛ'}</div><div className="mt-2 space-y-2">{(rule.commission_rule_versions||[]).sort((a,b)=>b.version-a.version).map(v=><div key={v.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-zinc-50 p-3 text-sm dark:bg-zinc-800"><div><b>V{v.version} · {v.rule_type==='no_commission'?'ኮሚሽን የለም':(v.rule_type==='tiered'||v.rule_type==='price_range')?((v.commission_rule_tiers||[]).length+' ክልሎች'):v.rate_percent!==null&&v.rate_percent!==undefined?Number(v.rate_percent)+'%':Number(v.fixed_amount||0)+' ብር'}</b><div className="text-xs text-zinc-500">ከ {String(v.effective_from).slice(0,10)}{v.effective_to?' እስከ '+String(v.effective_to).slice(0,10):''}</div>{(v.commission_rule_tiers||[]).length>0&&<div className="mt-2 space-y-1 text-xs text-zinc-500">{v.commission_rule_tiers.slice().sort((a,b)=>a.tier_order-b.tier_order).map(t=><div key={t.id}>{t.min_value} – {t.max_value==null?'∞':t.max_value}: {t.rate_percent!=null?Number(t.rate_percent)+'%':Number(t.fixed_amount||0)+' ብር'}</div>)}</div>}</div><span className={v.status==='active'?'text-emerald-600':'text-zinc-400'}>{v.status==='active'?'ንቁ':'ቀድሞ'}</span></div>)}</div></div>)}{!commissionRules.length&&<p className="text-sm text-zinc-500">ለዚህ ምርት እስካሁን ኮሚሽን አልተመዘገበም።</p>}</div></div>
+<button className="btn sm:col-span-2" disabled={commissionBusy}>{commissionBusy?'በመመዝገብ ላይ…':'የኮሚሽን ስሪት መዝግብ'}</button></form>:<p className="rounded-xl bg-zinc-50 p-3 text-sm dark:bg-zinc-800">የኮሚሽን ማስተካከያ ስልጣን ለዋና አስተዳዳሪ ብቻ ነው።</p>}<div className="mt-4 space-y-3">{commissionRules.map(rule=><div key={rule.id} className="rounded-xl border p-3 dark:border-zinc-700"><div className="font-semibold">{rule.name}</div><div className="mt-1 text-xs text-zinc-500">ሽያጭ መነሻ፦ በድርጅት ደንብ ይወሰናል · መነሻ፦ {rule.basis==='quantity'?'ብዛት':rule.basis==='unit_price'?'የአንድ እቃ ዋጋ':'ጠቅላላ ዋጋ'} · አይነት፦ {rule.rule_type==='fixed_amount'?'ቋሚ':rule.rule_type==='tiered'||rule.rule_type==='price_range'?'ክልል':rule.rule_type==='no_commission'?'ኮሚሽን የለም':'መቶኛ'}</div><div className="mt-2 space-y-2">{(rule.commission_rule_versions||[]).sort((a,b)=>b.version-a.version).map(v=><div key={v.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-zinc-50 p-3 text-sm dark:bg-zinc-800"><div><b>V{v.version} · {v.rule_type==='no_commission'?'ኮሚሽን የለም':(v.rule_type==='tiered'||v.rule_type==='price_range')?((v.commission_rule_tiers||[]).length+' ክልሎች'):v.rate_percent!==null&&v.rate_percent!==undefined?Number(v.rate_percent)+'%':Number(v.fixed_amount||0)+' ብር'}</b><div className="text-xs text-zinc-500">ከ {String(v.effective_from).slice(0,10)}{v.effective_to?' እስከ '+String(v.effective_to).slice(0,10):''}</div>{(v.commission_rule_tiers||[]).length>0&&<div className="mt-2 space-y-1 text-xs text-zinc-500">{v.commission_rule_tiers.slice().sort((a,b)=>a.tier_order-b.tier_order).map(t=><div key={t.id}>{t.min_value} – {t.max_value==null?'∞':t.max_value}: {t.rate_percent!=null?Number(t.rate_percent)+'%':Number(t.fixed_amount||0)+' ብር'}</div>)}</div>}</div><span className={v.status==='active'?'text-emerald-600':'text-zinc-400'}>{v.status==='active'?'ንቁ':'ቀድሞ'}</span></div>)}</div></div>)}{!commissionRules.length&&<p className="text-sm text-zinc-500">ለዚህ ምርት እስካሁን ኮሚሽን አልተመዘገበም።</p>}</div></div>
  <div className="rounded-2xl border bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900"><h3 className="mb-3 font-bold">ዋጋ እና የBranch ምደባ</h3>{global?<form onSubmit={addPrice} className="grid gap-2"><input className="input" type="number" min="0" step="0.01" placeholder="አዲስ ዋጋ" value={price.value} onChange={e=>setPrice({...price,value:e.target.value})}/><input className="input" type="datetime-local" value={price.from} onChange={e=>setPrice({...price,from:e.target.value})}/><button className="btn">አዲስ ዋጋ መዝግብ</button></form>:<button className="btn w-full" onClick={assign}>{ownBranch?'ወደ ራሴ ቅርንጫፍ አስገባ':'ወደ ድርጅቴ አስገባ'}</button>}<div className="mt-4 space-y-2">{global&&prices.map(p=><div key={p.id} className="rounded-xl border p-3"><b>{Number(p.price).toLocaleString()} ብር</b><span className="ml-2 text-xs text-zinc-500">Version {p.version} · {new Date(p.effective_from).toLocaleString()}</span></div>)}{branchAdmin&&assigned.map(a=><div key={a.id} className="rounded-xl border p-3"><b>{a.branches?.name||'ቅርንጫፍ'}</b><span className="ml-2 text-xs text-zinc-500">ተመድቧል</span></div>)}{global&&<p className="mt-4 text-xs text-zinc-500">Commission እና ዋና የዋጋ ውሳኔ የSuper Admin ስልጣን ነው።</p>}</div></div></div>}
  </section>
 }
 
 function OrganizationsAdminPage({currentUser}){
- const [section,setSection]=useState('organizations')
+ const [section,setSection]=useState('organizations'),[entryScope,setEntryScope]=useState(null)
  return <section className="space-y-5">
   <div><h2 className="text-2xl font-black">ድርጅቶች፣ ቅርንጫፎች እና ሰራተኞች</h2><p className="text-sm text-slate-400">ድርጅትን፣ በድርጅቱ ስር የሚፈጠሩ ቅርንጫፎችን፣ ሰራተኞችን እና ሚናዎችን ከአንድ ገጽ ያስተዳድሩ።</p></div>
   <div className="flex flex-wrap gap-2 rounded-xl border border-white/10 bg-white/[0.03] p-2">
    <button type="button" onClick={()=>setSection('organizations')} className={section==='organizations'?'rounded-lg bg-emerald-400 px-4 py-2 text-sm font-bold text-slate-950':'rounded-lg px-4 py-2 text-sm font-semibold text-slate-300 hover:bg-white/5'}>ድርጅቶች እና ቅርንጫፎች</button>
    <button type="button" onClick={()=>setSection('employees')} className={section==='employees'?'rounded-lg bg-emerald-400 px-4 py-2 text-sm font-bold text-slate-950':'rounded-lg px-4 py-2 text-sm font-semibold text-slate-300 hover:bg-white/5'}>ሰራተኞች እና ሚናዎች</button>
   </div>
-  {section==='organizations'?<OrganizationManagement/>:<UserManagement currentUser={currentUser}/>}
+  {section==='organizations'?<><OrganizationManagement onEnterBranch={b=>{setEntryScope(b);setSection('employees')}}/><DepartmentManagement currentUser={currentUser}/></>:<UserManagement currentUser={currentUser} initialOrganizationId={entryScope?.organization_id} initialBranchId={entryScope?.id}/>}
  </section>
 }
 
@@ -136,8 +149,16 @@ export default function App(){
  const login=async e=>{
   e.preventDefault();setError('')
   const identifier=String(e.currentTarget.identifier.value||'').trim(),password=e.currentTarget.password.value
-  if(!identifier){setError('ስልክ ቁጥር ወይም ኢሜይል ያስገቡ');return}
+  if(!identifier){setError('Username፣ ስልክ ቁጥር ወይም ኢሜይል ያስገቡ');return}
   try{
+   if(!identifier.includes('@')&&!/^[+\d\s()-]+$/.test(identifier)){
+    const {data,error}=await supabase.functions.invoke('username-login',{body:{username:identifier,password}})
+    if(error)throw error
+    if(!data?.session?.access_token||!data?.session?.refresh_token)throw new Error('Username ወይም የይለፍ ቃል ትክክል አይደለም')
+    const {data:sessionData,error:sessionError}=await supabase.auth.setSession({access_token:data.session.access_token,refresh_token:data.session.refresh_token})
+    if(sessionError)throw sessionError
+    setUser(await loadProfile(sessionData.user.id));return
+   }
    const credentials=identifier.includes('@')?{email:identifier,password}:{phone:normalizePhone(identifier),password}
    const {data,error}=await supabase.auth.signInWithPassword(credentials)
    if(error)throw error
@@ -149,7 +170,7 @@ export default function App(){
  if(loading)return <div className="min-h-screen grid place-items-center bg-zinc-950 text-white">በመጫን ላይ…</div>
  if(!user)return <div className="min-h-screen grid place-items-center bg-zinc-950 p-4"><form onSubmit={login} className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900 p-7 text-white shadow-2xl">
   <div className="text-center mb-7"><div className="mx-auto mb-3 grid h-14 w-14 place-items-center rounded-2xl bg-emerald-600 text-2xl font-black">D</div><h1 className="text-3xl font-black text-emerald-400">Dirsha-ድርሻ</h1><p className="mt-2 text-sm text-zinc-400">እንኳን ወደ Dirsha-ድርሻ መጡ</p></div>
-  <label className="block text-sm mb-1">ስልክ ቁጥር ወይም ኢሜይል</label><input name="identifier" type="text" inputMode="email" autoComplete="username" placeholder="09XXXXXXXX ወይም admin@example.com" required className="input"/>
+  <label className="block text-sm mb-1">Username፣ ስልክ ቁጥር ወይም ኢሜይል</label><input name="identifier" type="text" autoComplete="username" placeholder="username፣ 09XXXXXXXX ወይም admin@example.com" required className="input"/>
   <label className="block text-sm mb-1 mt-4">የይለፍ ቃል</label><input name="password" type="password" autoComplete="current-password" required className="input"/>
   {error&&<div className="mt-4 rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-300">{error}</div>}
   <button className="btn mt-5 w-full" type="submit">ግባ</button>
@@ -162,7 +183,7 @@ export default function App(){
  const customAllowed=page=>page==='dashboard'||page==='profile'||customPages.has(page)||customPages.has('page.'+page)||customPages.has('pages.'+page)||customPages.has('view_'+page)
  const customItems=['dashboard','users','workforce','products','teams','sales','commissions','earnings','reports','profile'].filter(x=>x==='dashboard'||x==='profile'||(x==='users'&&(hasPermCode('users.create')||hasPermCode('users.manage')))||(x==='workforce'&&hasPermCode('attendance.manage'))||(x==='products'&&(hasPermCode('products.view')||hasPermCode('products.assign')))||(x==='teams'&&(hasPermCode('teams.manage')||hasPermCode('teams.split')))||(x==='sales'&&(hasPermCode('sales.create')||hasPermCode('sales.review')))||(x==='commissions'&&(hasPermCode('commission.view')||hasPermCode('commission.set')||hasPermCode('sales.review')))||(x==='earnings'&&(hasPermCode('earnings.view')||hasPermCode('earnings.adjust')))||(x==='reports'&&(hasPermCode('performance.view')||hasPermCode('reports.export'))))
  const customRoleOrgWide=['users.manage','attendance.manage','sales.review','commission.view','earnings.view','performance.view','reports.export'].some(hasPermCode)
- const items=global?['dashboard','branches','workforce','products','sales','commissions','earnings','reports','profile']:branchAdmin?['dashboard','users','teams','products','sales','commissions','earnings','reports','profile']:customRole?customItems:['dashboard','sales','commissions','earnings','reports','profile']
+ const items=global?['dashboard','branches','workforce','products','commissions','earnings','reports','profile']:branchAdmin?['dashboard','users','teams','workforce','products','sales','commissions','earnings','reports','profile']:customRole?customItems:['dashboard','sales','commissions','earnings','reports','profile']
  return <div className="app-shell min-h-screen text-slate-100 md:flex">
   <aside className={sidebarOpen?"hidden w-64 shrink-0 flex-col border-r border-white/10 bg-[#101827] text-slate-200 md:flex":"hidden"}>
    <div className="flex h-20 items-center gap-3 border-b border-white/10 px-6"><div className="grid h-10 w-10 place-items-center rounded-xl bg-emerald-400 text-xl font-black text-slate-950">D</div><div><div className="font-black tracking-wide text-white">Dirsha<span className="text-emerald-400">-ድርሻ</span></div><div className="text-[11px] text-slate-400">Commission workspace</div></div></div>
